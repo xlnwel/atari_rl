@@ -79,12 +79,12 @@ class Replay:
         raise NotImplementedError
 
     """ Implementation """
-    def _add(self, obs, action, reward, done):
+    def _add(self, obs, action, reward, next_obs, done):
         """ add is only used for single agent, no multiple adds are expected to run at the same time
             but it may fight for resource with self.sample if background learning is enabled """
         if self.n_steps > 1:
             add_buffer(self.tb, self.tb_idx, obs, action, reward, 
-                        done, self.n_steps, self.gamma)
+                        next_obs, done, self.n_steps, self.gamma)
             
             if not self.tb_full and self.tb_idx == self.tb_capacity - 1:
                 self.tb_full = True
@@ -101,7 +101,7 @@ class Replay:
         else:
             with self.locker:
                 add_buffer(self.memory, self.mem_idx, obs, action, reward,
-                            done, self.n_steps, self.gamma)
+                            next_obs, done, self.n_steps, self.gamma)
                 self.mem_idx += 1
 
     def _sample(self):
@@ -131,7 +131,7 @@ class Replay:
 
         obs = np.stack([self._encode_obs(idx, self.memory['obs'], self.memory['done'],
                             self.frame_history_len, self.is_full, self.capacity) for idx in indexes])
-        next_obs = np.stack([self._encode_obs(idx+1, self.memory['obs'], self.memory['done'],
+        next_obs = np.stack([self._encode_obs(idx, self.memory['next_obs'], self.memory['done'],
                                 self.frame_history_len, self.is_full, self.capacity) for idx in indexes])
 
         return (

@@ -4,7 +4,7 @@ from replay.utils import init_buffer, add_buffer, copy_buffer
 
 
 class LocalBuffer(dict):
-    def __init__(self, args, state_space, action_dim):
+    def __init__(self, args, obs_space, action_dim):
         """ The following two fake data members are only used to complete the data pipeline """
         self.fake_ratio = np.zeros(args['local_capacity'])
         self.fake_ids = np.zeros(args['local_capacity'], dtype=np.int32)
@@ -14,12 +14,12 @@ class LocalBuffer(dict):
         self.n_steps = args['n_steps']
         self.gamma = args['gamma']
 
-        init_buffer(self, self.capacity, state_space, action_dim, True)
+        init_buffer(self, self.capacity, obs_space, action_dim, True)
         self.reset()
 
         if self.n_steps > 1:
             self.tb = {}
-            init_buffer(self.tb, self.n_steps, state_space, action_dim, False)
+            init_buffer(self.tb, self.n_steps, obs_space, action_dim, False)
             self.tb_idx = 0
             self.tb_full = False
 
@@ -29,16 +29,16 @@ class LocalBuffer(dict):
 
     def __call__(self):
         while True:
-            yield self.fake_ratio, self.fake_ids, (self['state'], self['action'], self['reward'], 
-                                self['next_state'], self['done'], self['steps'])
+            yield self.fake_ratio, self.fake_ids, (self['obs'], self['action'], self['reward'], 
+                                self['next_obs'], self['done'], self['steps'])
 
     def reset(self):
         self.idx = 0
         
-    def add(self, state, action, reward, next_state, done):
+    def add(self, obs, action, reward, next_obs, done):
         if self.n_steps > 1:
-            add_buffer(self.tb, self.tb_idx, state, action, reward, 
-                        next_state, done, self.n_steps, self.gamma)
+            add_buffer(self.tb, self.tb_idx, obs, action, reward, 
+                        next_obs, done, self.n_steps, self.gamma)
             
             if not self.tb_full and self.tb_idx == self.n_steps - 1:
                 self.tb_full = True
@@ -48,6 +48,6 @@ class LocalBuffer(dict):
                 copy_buffer(self, self.idx, self.idx+1, self.tb, self.tb_idx, self.tb_idx+1)
                 self.idx += 1
         else:
-            add_buffer(self, self.idx, state, action, reward,
-                        next_state, done, self.n_steps, self.gamma)
+            add_buffer(self, self.idx, obs, action, reward,
+                        next_obs, done, self.n_steps, self.gamma)
             self.idx += 1

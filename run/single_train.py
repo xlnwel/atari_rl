@@ -79,7 +79,7 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
         envtime, (next_obs, reward, done, _) = timeit(lambda: agent.env.step(action))
         envtimes.append(envtime)
         
-        addtime, _ = timeit(lambda: agent.add_data(obs, action, reward, done))
+        addtime, _ = timeit(lambda: agent.add_data(obs, action, reward, next_obs, done))
         addtimes.append(addtime)
         if not background_learning and agent.buffer.good_to_learn:
             learntime, _ = timeit(lambda: agent.atari_learn(t))
@@ -98,8 +98,8 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
             avg_score = np.mean(episode_scores[-100:])
             eps_len = episode_lengths[-1]
             avg_eps_len = np.mean(episode_lengths)
-            if agent.log_tensorboard and agent.log_score:
-                agent.log_stats(score=score, avg_score=avg_score, eps_len=eps_len, avg_eps_len=avg_eps_len)
+            if hasattr(agent, 'stats'):
+                agent.record_stats(score=score, avg_score=avg_score, eps_len=eps_len, avg_eps_len=avg_eps_len)
 
             log_info = {
                 'ModelName': f'{agent.args["algorithm"]}-{agent.model_name}',
@@ -128,7 +128,7 @@ def main(env_args, agent_args, buffer_args, render=False):
         raise NotImplementedError
 
     agent_args['env_stats']['times'] = 1
-    agent = Agent('Agent', agent_args, env_args, buffer_args, log_tensorboard=False, log_score=True, log_params=False, device='/device:GPU:0')
+    agent = Agent('Agent', agent_args, env_args, buffer_args, log_tensorboard=False, log_stats=True, log_params=False, device='/device:GPU:0')
     if agent_args['background_learning']:
         utils.pwc('Background Learning...')
         lt = threading.Thread(target=agent.background_learning, daemon=True)
@@ -138,4 +138,4 @@ def main(env_args, agent_args, buffer_args, render=False):
     model = agent_args['model_name']
     utils.pwc(f'Model {model} starts training')
     
-    train(agent, render, log_steps=int(1e3), background_learning=agent_args['background_learning'])
+    train(agent, render, log_steps=int(1e4), background_learning=agent_args['background_learning'])

@@ -23,7 +23,7 @@ def get_worker(BaseClass, *args, **kwargs):
                     save=False, 
                     log_tensorboard=False, 
                     log_params=False,
-                    log_score=False,
+                    log_stats=False,
                     device=None):
             self.no = worker_no
 
@@ -35,7 +35,7 @@ def get_worker(BaseClass, *args, **kwargs):
                             save=save,
                             log_tensorboard=log_tensorboard,
                             log_params=log_params,
-                            log_score=log_score,
+                            log_stats=log_stats,
                             device=device)
 
             self.max_episodes = max_episodes
@@ -48,13 +48,13 @@ def get_worker(BaseClass, *args, **kwargs):
             episode_i = 0
             
             while True:
-                state = self.env.reset()
+                obs = self.env.reset()
 
                 for _ in range(self.max_path_length):
-                    action = self.act(state)
-                    next_state, reward, done, _ = self.env.step(action)
+                    action = self.act(obs)
+                    next_obs, reward, done, _ = self.env.step(action)
                     
-                    self.buffer.add(state, action, reward, next_state, done)
+                    self.buffer.add(obs, action, reward, next_obs, done)
 
                     if self.buffer.is_full:
                         priority = self.sess.run(self.priority)
@@ -63,7 +63,7 @@ def get_worker(BaseClass, *args, **kwargs):
                         learner.merge_buffer.remote(dict(self.buffer), self.buffer.capacity)
                         self.buffer.reset()
 
-                    state = next_state
+                    obs = next_obs
 
                     if done:
                         break
@@ -77,7 +77,7 @@ def get_worker(BaseClass, *args, **kwargs):
                             eps_len=eps_len, avg_eps_len=np.mean(eps_len_deque), 
                             worker_no=self.no)
                             
-                learner.log_stats.remote(stats)
+                learner.record_stats.remote(stats)
                 
                 # pull weights from learner
                 if episode_i >= self.max_episodes:

@@ -72,7 +72,6 @@ def display_var_info(vars, name='trainable'):
 def get_available_gpus():
     # recipe from here:
     # https://stackoverflow.com/questions/38559755/how-to-get-current-available-gpus-in-tensorflow?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
- 
     from tensorflow.python.client import device_lib
     local_device_protos = device_lib.list_local_devices()
     return [x.name for x in local_device_protos if x.device_type == 'GPU']

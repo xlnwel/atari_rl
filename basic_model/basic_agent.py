@@ -30,7 +30,7 @@ class OffPolicyOperation(Model, ABC):
                  save=True, 
                  log_tensorboard=True, 
                  log_params=False, 
-                 log_score=True, 
+                 log_stats=True, 
                  device=None):
         # hyperparameters
         self.gamma = args['gamma'] if 'gamma' in args else .99
@@ -68,7 +68,7 @@ class OffPolicyOperation(Model, ABC):
                          save=save, 
                          log_tensorboard=log_tensorboard, 
                          log_params=log_params, 
-                         log_score=log_score, 
+                         log_stats=log_stats, 
                          device=device)
 
         self._initialize_target_net()
@@ -98,8 +98,8 @@ class OffPolicyOperation(Model, ABC):
         
         return np.squeeze(action)
 
-    def add_data(self, obs, action, reward, done):
-        self.buffer.add(obs, action, reward, done)
+    def add_data(self, obs, action, reward, next_obs, done):
+        self.buffer.add(obs, action, reward, next_obs, done)
 
     def background_learning(self):
         from utility.debug_tools import timeit
