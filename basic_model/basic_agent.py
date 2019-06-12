@@ -12,8 +12,8 @@ from basic_model.model import Model
 from env.gym_env import GymEnv, GymEnvVec
 from algo.apex.buffer import LocalBuffer
 from replay.proportional_replay import ProportionalPrioritizedReplay
-# from replay.uniform_replay import UniformReplay
-from algo.rainbow_iqn.replay import ReplayBuffer as UniformReplay
+from replay.uniform_replay import UniformReplay
+# from algo.rainbow_iqn.replay import ReplayBuffer as UniformReplay
 
 
 class OffPolicyOperation(Model, ABC):
@@ -55,8 +55,7 @@ class OffPolicyOperation(Model, ABC):
         if self.buffer_type == 'proportional':
             self.buffer = ProportionalPrioritizedReplay(buffer_args, self.env.obs_space)
         elif self.buffer_type == 'uniform':
-            # self.buffer = UniformReplay(buffer_args, self.env.obs_space)
-            self.buffer = UniformReplay(int(float(buffer_args['capacity'])), buffer_args['frame_history_len'])
+            self.buffer = UniformReplay(buffer_args, self.env.obs_space)
         elif self.buffer_type == 'local':
             self.buffer = LocalBuffer(buffer_args, self.env.obs_space)
 

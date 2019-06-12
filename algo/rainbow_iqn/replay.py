@@ -14,7 +14,7 @@ def sample_n_unique(sampling_f, n):
     return res
 
 class ReplayBuffer(object):
-    def __init__(self, size, frame_history_len, lander=False):
+    def __init__(self, args, obs_space, lander=False):
         """This is a memory efficient implementation of the replay buffer.
 
         The sepecific memory optimizations use here are:
@@ -42,8 +42,8 @@ class ReplayBuffer(object):
         """
         self.lander = lander
 
-        self.size = size
-        self.frame_history_len = frame_history_len
+        self.size = args['capacity']
+        self.frame_history_len = args['frame_history_len']
 
         self.next_idx      = 0
         self.num_in_buffer = 0
