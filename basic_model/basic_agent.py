@@ -12,8 +12,8 @@ from basic_model.model import Model
 from env.gym_env import GymEnv, GymEnvVec
 from algo.apex.buffer import LocalBuffer
 from replay.proportional_replay import ProportionalPrioritizedReplay
-from replay.uniform_replay import UniformReplay
-# from algo.rainbow_iqn.replay import ReplayBuffer as UniformReplay
+# from replay.uniform_replay import UniformReplay
+from algo.rainbow_iqn.replay import ReplayBuffer as UniformReplay
 
 
 class OffPolicyOperation(Model, ABC):
