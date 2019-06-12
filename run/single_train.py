@@ -50,13 +50,11 @@ class PiecewiseSchedule(object):
 
 
 def train(agent, render, log_steps, print_terminal_info=True, background_learning=True):
-    exploration_schedule = PiecewiseSchedule(
-        [
-            (0, 1.0),
-            (1e6, 0.1),
-            (2e6 / 2, 0.01),
-        ], outside_value=0.01
-    )
+    n_iterations = 2e8 / 4.
+    exploration_schedule = PiecewiseSchedule([(0, 1.0), (n_iterations / 10, 0.1), (n_iterations / 2, 0.01)], 
+                                            outside_value=0.01)
+    lr_schedule = PiecewiseSchedule([(0, 1e-4), (n_iterations / 10, 1e-4), (n_iterations / 2,  5e-5)],
+                                    outside_value=5e-5)
     obs = agent.env.reset()
     t = 0
     acttimes = deque(maxlen=log_steps)
@@ -64,10 +62,10 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
     addtimes = deque(maxlen=log_steps)
     learntimes = deque(maxlen=log_steps)
     episode_lengths = deque(maxlen = 100)
+    best_score = -float('inf')
     el = 0
     while agent.env.get_total_steps() < 2e8:
-        el += 1
-        t += 1
+        idx = agent.buffer.store_frame(obs)
         if render:
             agent.env.render()
         if not agent.buffer.good_to_learn or np.random.random_sample() < exploration_schedule.value(t):
@@ -79,10 +77,11 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
         envtime, (next_obs, reward, done, _) = timeit(lambda: agent.env.step(action))
         envtimes.append(envtime)
         
-        addtime, _ = timeit(lambda: agent.add_data(obs, action, reward, next_obs, done))
+        addtime, _ = timeit(lambda: agent.buffer.store_effect(idx, action, reward, done))
+        # addtime, _ = timeit(lambda: agent.add_data(obs, action, reward, next_obs, done))
         addtimes.append(addtime)
         if not background_learning and agent.buffer.good_to_learn:
-            learntime, _ = timeit(lambda: agent.atari_learn(t))
+            learntime, _ = timeit(lambda: agent.learn(t, lr_schedule.value(t)))
             learntimes.append(learntime)
 
         obs = agent.env.reset() if done else next_obs
@@ -90,12 +89,16 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
             episode_lengths.append(el)
             el = 0
 
+        el += 1
+        t += 1
+
         if t % log_steps == 0:
             episode_scores = agent.env.get_episode_rewards()
             # episode_lengths = agent.env.get_episode_lengths()
             eps_len = agent.env.get_length()
             score = episode_scores[-1]
             avg_score = np.mean(episode_scores[-100:])
+            best_score = max(best_score, avg_score)
             eps_len = episode_lengths[-1]
             avg_eps_len = np.mean(episode_lengths)
             if hasattr(agent, 'stats'):
@@ -104,15 +107,18 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
             log_info = {
                 'ModelName': f'{agent.args["algorithm"]}-{agent.model_name}',
                 'Timestep': f'{(t//1000):3d}k',
+                'Iteration': len(episode_scores),
                 'ActTime': utils.timeformat(np.mean(acttimes)),
                 'EnvTime': utils.timeformat(np.mean(envtimes)),
                 'AddTime': utils.timeformat(np.mean(addtimes)),
                 'LearnTime': utils.timeformat(np.mean(learntimes) if learntimes else 0),
-                'Iteration': len(episode_scores),
                 'Score': score,
                 'AvgScore': avg_score,
+                'BestScore': best_score,
                 'EpsLen': eps_len,
-                'AvgEpsLen': avg_eps_len
+                'AvgEpsLen': avg_eps_len,
+                'LearningRate': lr_schedule.value(t),
+                'Exploration': exploration_schedule.value(t)
             }
             [agent.log_tabular(k, v) for k, v in log_info.items()]
             agent.dump_tabular(print_terminal_info=print_terminal_info)
@@ -128,7 +134,7 @@ def main(env_args, agent_args, buffer_args, render=False):
         raise NotImplementedError
 
     agent_args['env_stats']['times'] = 1
-    agent = Agent('Agent', agent_args, env_args, buffer_args, log_tensorboard=False, log_stats=True, log_params=False, device='/device:GPU:0')
+    agent = Agent('Agent', agent_args, env_args, buffer_args, log_tensorboard=True, log_stats=True, log_params=False, device='/device:GPU:0')
     if agent_args['background_learning']:
         utils.pwc('Background Learning...')
         lt = threading.Thread(target=agent.background_learning, daemon=True)

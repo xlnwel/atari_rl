@@ -14,7 +14,7 @@ def sample_n_unique(sampling_f, n):
     return res
 
 class ReplayBuffer(object):
-    def __init__(self, args, obs_space, lander=False):
+    def __init__(self, size, frame_history_len, lander=False):
         """This is a memory efficient implementation of the replay buffer.
 
         The sepecific memory optimizations use here are:
@@ -42,8 +42,8 @@ class ReplayBuffer(object):
         """
         self.lander = lander
 
-        self.size = args['capacity']
-        self.frame_history_len = args['frame_history_len']
+        self.size = size
+        self.frame_history_len = frame_history_len
 
         self.next_idx      = 0
         self.num_in_buffer = 0
@@ -68,12 +68,13 @@ class ReplayBuffer(object):
     def _encode_sample(self, idxes):
         obs_batch      = np.concatenate([self._encode_observation(idx)[None] for idx in idxes], 0)
         act_batch      = self.action[idxes]
-        rew_batch      = self.reward[idxes].reshape((-1, 1))
+        rew_batch      = self.reward[idxes]
         next_obs_batch = np.concatenate([self._encode_observation(idx + 1)[None] for idx in idxes], 0)
-        done_mask      = self.done[idxes].reshape((-1, 1))
-        step_batch     = np.ones_like(rew_batch)
+        done_mask      = self.done[idxes]
+        steps = np.ones_like(rew_batch)
 
-        return obs_batch, act_batch, rew_batch, next_obs_batch, done_mask, step_batch
+        return obs_batch, act_batch, rew_batch, next_obs_batch, done_mask, steps
+
 
     def sample(self, batch_size):
         """Sample `batch_size` different transitions.
@@ -123,9 +124,7 @@ class ReplayBuffer(object):
             encodes frame at time `t - frame_history_len + i`
         """
         assert self.num_in_buffer > 0
-        self.obs[self.next_idx] = obs
-
-        return self._encode_observation(self.next_idx % self.size)
+        return self._encode_observation((self.next_idx - 1) % self.size)
 
     def _encode_observation(self, idx):
         end_idx   = idx + 1 # make noninclusive
@@ -171,8 +170,8 @@ class ReplayBuffer(object):
         if self.obs is None:
             self.obs      = np.empty([self.size] + list(frame.shape), dtype=np.float32 if self.lander else np.uint8)
             self.action   = np.empty([self.size],                     dtype=np.int32)
-            self.reward   = np.empty([self.size],                     dtype=np.float32)
-            self.done     = np.empty([self.size],                     dtype=np.bool)
+            self.reward   = np.empty([self.size, 1],                     dtype=np.float32)
+            self.done     = np.empty([self.size, 1],                     dtype=np.bool)
         self.obs[self.next_idx] = frame
 
         ret = self.next_idx
@@ -181,7 +180,7 @@ class ReplayBuffer(object):
 
         return ret
 
-    def add(self, obs, action, reward, next_obs, done):
+    def store_effect(self, idx, action, reward, done):
         """Store effects of action taken after obeserving frame stored
         at index idx. The reason `store_frame` and `store_effect` is broken
         up into two functions is so that once can call `encode_recent_observation`
@@ -198,8 +197,6 @@ class ReplayBuffer(object):
         done: bool
             True if episode was finished after performing that action.
         """
-        idx = self.store_frame(obs)
-
         self.action[idx] = action
         self.reward[idx] = reward
         self.done[idx]   = done

@@ -4,7 +4,6 @@ import tensorflow as tf
 from basic_model.basic_nets import Base
 from utility.debug_tools import assert_colorize
 
-
 class Networks(Base):
     """ Interface """
     def __init__(self, 
@@ -44,10 +43,11 @@ class Networks(Base):
 
     """ Implementation """
     def _build_graph(self):
-        x = self.obs
-        if self.args['iqn']:
-            net_fn = (lambda n_quantiles, batch_size, name, reuse=False: 
-                            self._iqn_net(x, 
+        action_fn = lambda Qs, name: tf.argmax(Qs, axis=1, name=name)
+        
+        if self.args['algo'] == 'iqn':
+            net_fn = (lambda obs, n_quantiles, batch_size, name, reuse=False: 
+                            self._iqn_net(obs, 
                                         n_quantiles, 
                                         batch_size, 
                                         self.n_actions,
@@ -57,16 +57,17 @@ class Networks(Base):
                                         name=name, 
                                         reuse=reuse))
             # online IQN network
-            quantiles, quantile_values, Qs = net_fn(self.N, self.batch_size, 'main')
+            quantiles, quantile_values, Qs = net_fn(self.obs, self.N, self.batch_size, 'main')
             # Qs for online action selection
-            _, _, Qs_online = net_fn(self.K, 1, 'main', reuse=True)      
+            _, _, Qs_online = net_fn(self.obs, self.K, 1, 'main', reuse=True)      
             # target IQN network
-            _, quantile_values_next_target, Qs_next_target = net_fn(self.N_prime, self.batch_size, 'target')
-            _, _, Qs_next = net_fn(self.K, self.batch_size, 'main', reuse=True)
+            _, quantile_values_next_target, Qs_next_target = net_fn(self.next_obs, self.N_prime, self.batch_size, 'target')
+            # next online Qs for double Q action selection
+            _, _, Qs_next = net_fn(self.next_obs, self.K, self.batch_size, 'main', reuse=True)
             
             self.quantiles = quantiles                                              # [B, N, 1]
-            self.best_action = self._iqn_action(Qs_online, 'best_action')           # [1]
-            next_action = self._iqn_action(Qs_next, 'next_action')                  # [B]
+            self.best_action = action_fn(Qs_online, 'best_action')           # [1]
+            next_action = action_fn(Qs_next, 'next_action')                  # [B]
 
             # quantile_values for regression loss
             # Q for priority required by PER
@@ -75,50 +76,79 @@ class Networks(Base):
                                                                                     self.N_prime,
                                                                                     quantile_values_next_target, 
                                                                                     Qs_next_target)
-        else: 
-            net_fn = lambda name, reuse=False: self._duel_net(x, self.n_actions, name=name, reuse=reuse)
-            Qs = net_fn('main')
-            Qs_next = net_fn(name='main', reuse=True)
-            Qs_next_target = net_fn(name='target')
+        elif self.args['algo'] == 'duel': 
+            net_fn = lambda obs, name, reuse=False: self._duel_net(obs, self.n_actions, name=name, reuse=reuse)
+            Qs = net_fn(self.obs, 'main')
+            Qs_next = net_fn(self.next_obs, name='main', reuse=True)
+            Qs_next_target = net_fn(self.next_obs, name='target')
 
+        elif self.args['algo'] == 'double':
+            net_fn = lambda obs, name, reuse=False: self._q_net(obs, self.n_actions, name=name, reuse=reuse)
+            Qs = net_fn(self.obs, 'main')
+            Qs_next = net_fn(self.next_obs, name='main', reuse=True)
+            Qs_next_target = net_fn(self.next_obs, name='target')
+
+        if self.args['algo'] == 'duel' or self.args['algo'] == 'double':
             with tf.name_scope('q_values'):
                 self.Q = tf.reduce_sum(tf.one_hot(self.action, self.n_actions) * Qs, axis=1, keepdims=True)
-                self.best_action = tf.argmax(Qs, axis=1, name='best_action')
-                next_action = tf.argmax(Qs_next, axis=1, name='next_action')
+                self.best_action = action_fn(Qs, 'best_action')
+                next_action = action_fn(Qs_next, 'next_action')
                 self.Q_next_target = tf.reduce_sum(tf.one_hot(next_action, self.n_actions) 
                                                     * Qs_next_target, axis=1, keepdims=True)
 
     def _iqn_net(self, obs, n_quantiles, batch_size, out_dim, psi_net, phi_net, f_net, name, reuse=None):
-        x = obs
         quantile_embedding_dim = self.args['quantile_embedding_dim']
 
-        # psi function in the paper
-        x_tiled = psi_net(x, n_quantiles, name, reuse)
+        with tf.variable_scope(name, reuse=reuse):
+            # psi function in the paper
+            x_tiled = psi_net(obs, n_quantiles)
             
-        with tf.name_scope(f'{name}_quantiles'):
-            quantile_shape = [n_quantiles * batch_size, 1]
-            quantiles = tf.random.uniform(quantile_shape, minval=0, maxval=1)
-            quantiles_tiled = tf.tile(quantiles, [1, quantile_embedding_dim])
-            # returned quantiles for computing quantile regression loss
-            quantiles_reformed = tf.transpose(tf.reshape(quantiles, [n_quantiles, batch_size, 1]), [1, 0, 2])
-        
-        h_dim = x_tiled.shape.as_list()[1]
+            with tf.name_scope(f'quantiles'):
+                quantile_shape = [n_quantiles * batch_size, 1]
+                quantiles = tf.random.uniform(quantile_shape, minval=0, maxval=1)
+                quantiles_tiled = tf.tile(quantiles, [1, quantile_embedding_dim])
+                # returned quantiles for computing quantile regression loss
+                quantiles_reformed = tf.transpose(tf.reshape(quantiles, [n_quantiles, batch_size, 1]), [1, 0, 2])
+            
+            h_dim = x_tiled.shape.as_list()[-1]
 
-        # phi function in the paper
-        x_quantiles = phi_net(quantiles_tiled, quantile_embedding_dim, h_dim, name, reuse)
+            # phi function in the paper
+            x_quantiles = phi_net(quantiles_tiled, quantile_embedding_dim, h_dim)
 
-        # Combine outputs of psi and phi
-        y = x_tiled * x_quantiles
-        # f function in the paper
-        quantile_values, q = f_net(y, out_dim, n_quantiles, batch_size, name, reuse)
+            # Combine outputs of psi and phi
+            y = x_tiled * x_quantiles
+            # f function in the paper
+            quantile_values, q = f_net(y, out_dim, n_quantiles, batch_size)
 
         return quantiles_reformed, quantile_values, q
 
-    def _iqn_action(self, Qs, name):
-        with tf.name_scope(name):
-            action = tf.argmax(Qs, axis=1, name='best_action')
+    def _psi_net(self, x, n_quantiles):
+        with tf.variable_scope('psi_net', reuse=reuse):
+            x = tf.layers.conv2d(x, 32, 8, 4, activation=tf.nn.relu)      # (19, 19, 32)
+            x = tf.layers.conv2d(x, 64, 4, 2, activation=tf.nn.relu)      # (9, 9, 64)
+            x = tf.layers.conv2d(x, 64, 3, 1, activation=tf.nn.relu)      # (7, 7, 64)
+            x = tf.layers.flatten(x)
+            x_tiled = tf.tile(x, [n_quantiles, 1])
         
-        return action
+        return x_tiled
+
+    def _phi_net(self, quantiles_tiled, quantile_embedding_dim, h_dim):
+        with tf.variable_scope('phi_net', reuse=reuse):
+            pi = tf.constant(np.pi)
+            x_quantiles = tf.cast(tf.range(1, quantile_embedding_dim + 1, 1), tf.float32) * pi * quantiles_tiled
+            x_quantiles = tf.cos(x_quantiles)
+            x_quantiles = tf.layers.dense(x_quantiles, h_dim)
+
+        return x_quantiles
+
+    def _f_net(self, x, out_dim, n_quantiles, batch_size):
+        with tf.variable_scope('f_net', reuse=reuse):
+            x = tf.layers.dense(x, 512, activation=tf.nn.relu)
+            quantile_values = tf.layers.dense(x, out_dim)
+            quantile_values = tf.reshape(quantile_values, (n_quantiles, batch_size, out_dim))
+            q = tf.reduce_mean(quantile_values, axis=0)
+
+        return quantile_values, q
         
     def _iqn_values(self, action, n_quantiles, quantile_values, Qs):
         with tf.name_scope('quantiles'):
@@ -132,53 +162,34 @@ class Networks(Base):
 
         return quantile_values, Q
 
-    def _psi_net(self, x, n_quantiles, name, reuse=None):
-        assert_colorize(x.shape.as_list()[1:] == [84, 84, 4], 
-                f'Input image should be of shape (84, 84, 4), but get {x.shape.as_list()[1:]}')
+    def _duel_net(self, x, out_dim, name, reuse):
+        with tf.variable_scope(name, reuse=reuse):
+            with tf.variable_scope('conv_net'):
+                x = tf.layers.conv2d(x, 32, 8, 4, activation=tf.nn.relu)      # (19, 19, 32)
+                x = tf.layers.conv2d(x, 64, 4, 2, activation=tf.nn.relu)      # (9, 9, 64)
+                x = tf.layers.conv2d(x, 64, 3, 1, activation=tf.nn.relu)      # (7, 7, 64)
+                x = tf.layers.flatten(x)
+            with tf.variable_scope('value_net'):
+                hv = tf.layers.dense(x, 512, activation=tf.nn.relu)
+                v = tf.layers.dense(hv, out_dim, name='V')
+            with tf.variable_scope('adv_net'):
+                ha = tf.layers.dense(x, 512, activation=tf.nn.relu)
+                a = tf.layers.dense(ha, out_dim, name='A')
 
-        name = f'{name}_net'
-        with tf.variable_scope(f'{name}_psi_net', reuse=reuse):
-            x = tf.layers.conv2d(x, 32, 8, 4, activation=tf.nn.relu)      # (19, 19, 32)
-            x = tf.layers.conv2d(x, 64, 4, 2, activation=tf.nn.relu)      # (9, 9, 64)
-            x = tf.layers.conv2d(x, 64, 3, 1, activation=tf.nn.relu)      # (7, 7, 64)
-            x = tf.layers.flatten(x)
-            x_tiled = tf.tile(x, [n_quantiles, 1])
+            with tf.name_scope('Q'):
+                q = v + a - tf.reduce_mean(a, axis=1, keepdims=True)
 
-        return x_tiled
-        
-    def _phi_net(self, quantiles_tiled, quantile_embedding_dim, h_dim, name, reuse):
-        with tf.variable_scope(f'{name}_phi_net', reuse=reuse):
-            pi = tf.constant(np.pi)
-            x_quantiles = tf.cast(tf.range(quantile_embedding_dim), tf.float32) * pi * quantiles_tiled
-            x_quantiles = tf.cos(x_quantiles)
-            x_quantiles = tf.layers.dense(x_quantiles, h_dim)
+        return q
 
-        return x_quantiles
-    
-    def _f_net(self, x, out_dim, n_quantiles, batch_size, name, reuse):
-        with tf.variable_scope(f'{name}_f_net', reuse=reuse):
-            x = self.dense_norm_activation(x, 512, norm=None, name='noisy_relu')
-            quantile_values = self.dense(x, out_dim, name='noisy')
-            quantile_values = tf.reshape(quantile_values, (n_quantiles, batch_size, out_dim))
-            q = tf.reduce_mean(quantile_values, axis=0)
-
-        return quantile_values, q
-
-    # dueling nets
-    def _duel_net(self, obs, out_dim, name, reuse=None):
-        x = obs
-
-        with tf.variable_scope(f'{name}_net', reuse=reuse):
-            x = tf.layers.conv2d(x, 32, 8, 4, activation=tf.nn.relu)      # (19, 19, 32)
-            x = tf.layers.conv2d(x, 64, 4, 2, activation=tf.nn.relu)      # (9, 9, 64)
-            x = tf.layers.conv2d(x, 64, 3, 1, activation=tf.nn.relu)      # (7, 7, 64)
-            x = tf.layers.flatten(x)
-            hv = self.noisy_norm_activation(x, 512, norm=None, name='noisy_relu_v')
-            v = self.noisy(hv, out_dim, name='V')
-            ha = self.noisy_norm_activation(x, 512, norm=None, name='noisy_relu_a')
-            a = self.noisy(ha, out_dim, name='A')
-
-        with tf.variable_scope('Q', reuse=reuse):
-            q = v + a - tf.reduce_mean(a, axis=1, keepdims=True)
+    def _q_net(self, x, out_dim, name, reuse=None):
+        with tf.variable_scope(name, reuse=reuse):
+            with tf.variable_scope('conv_net'):
+                x = tf.layers.conv2d(x, 32, 8, 4, activation=tf.nn.relu)      # (19, 19, 32)
+                x = tf.layers.conv2d(x, 64, 4, 2, activation=tf.nn.relu)      # (9, 9, 64)
+                x = tf.layers.conv2d(x, 64, 3, 1, activation=tf.nn.relu)      # (7, 7, 64)
+                x = tf.layers.flatten(x)
+            with tf.variable_scope('action_net'):
+                x = tf.layers.dense(x, 512, activation=tf.nn.relu)
+                q = tf.layers.dense(x, out_dim, name='Q')
 
         return q

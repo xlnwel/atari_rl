@@ -21,14 +21,14 @@ agent:
 
     frame_history_len: &fhl 4
     update_freq: 4
-    n_steps: 3
-    loss_type: mse   # huber or mse
+    n_steps: 1
+    loss_type: huber   # huber or mse
     target_update_freq: 10000
     
     Qnets:
         duel: False
         noisy_sigma: 0.5    # standard deviation for noisy layers
-        iqn: True
+        algo: double
         N: 8                # N in paper, num of quantiles for online quantile network
         N_prime: 8          # N' in paper, num of quantiles for target quantile network
         K: 32               # K in paper, num of quantiles for action selection

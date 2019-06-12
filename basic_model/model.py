@@ -82,15 +82,15 @@ class Module(Layer):
     def _build_graph(self):
         raise NotImplementedError
         
-    def _optimization_op(self, loss, tvars=None, opt_step=None):
+    def _optimization_op(self, loss, tvars=None, opt_step=None, schedule_lr=False):
         with tf.variable_scope(self.name + '_optimizer'):
-            optimizer, opt_step = self._adam_optimizer(opt_step=opt_step)
+            optimizer, learning_rate, opt_step = self._adam_optimizer(opt_step=opt_step, schedule_lr=schedule_lr)
             grads_and_vars = self._compute_gradients(loss, optimizer, tvars=tvars)
             opt = self._apply_gradients(optimizer, grads_and_vars, opt_step)
 
-        return opt, opt_step
+        return opt, learning_rate, opt_step
 
-    def _adam_optimizer(self, opt_step=None):
+    def _adam_optimizer(self, opt_step=None, schedule_lr=False):
         # params for optimizer
         learning_rate = float(self.args['learning_rate'])
         beta1 = float(self.args['beta1']) if 'beta1' in self.args else 0.9
@@ -105,16 +105,19 @@ class Module(Layer):
         else:
             opt_step = None
 
+        if schedule_lr:
+            learning_rate = tf.placeholder(tf.float32, (), name='learning_rate')
         if decay_rate == 1.:
             optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=beta1, beta2=beta2)
         else:
-            learning_rate = tf.train.exponential_decay(learning_rate, opt_step, decay_steps, decay_rate, staircase=True)
+            if not schedule_lr:
+                learning_rate = tf.train.exponential_decay(learning_rate, opt_step, decay_steps, decay_rate, staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=beta1, beta2=beta2, epsilon=epsilon)
 
             if self.log_tensorboard:
                 tf.summary.scalar('learning_rate_', learning_rate)
 
-        return optimizer, opt_step
+        return optimizer, learning_rate, opt_step
 
     def _compute_gradients(self, loss, optimizer, tvars=None):
         clip_norm = self.args['clip_norm'] if 'clip_norm' in self.args else 5.
@@ -123,10 +126,12 @@ class Module(Layer):
         with tf.name_scope(self.name + '_gradients'):
             with self.graph.control_dependencies(update_ops):
                 tvars = tvars if tvars else self.trainable_variables
-                grads, tvars = list(zip(*optimizer.compute_gradients(loss, var_list=tvars)))
-                grads, _ = tf.clip_by_global_norm(grads, clip_norm)
+                grads_vars = optimizer.compute_gradients(loss, var_list=tvars)
+                for i, (grad, var) in enumerate(grads_vars):
+                    if grad is not None:
+                        grads_vars[i] = (tf.clip_by_norm(grad, clip_norm), var)
         
-        return list(zip(grads, tvars))
+        return grads_vars
 
     def _apply_gradients(self, optimizer, grads_and_vars, opt_step=None):
         opt_op = optimizer.apply_gradients(grads_and_vars, global_step=opt_step, name=self.name + '_apply_gradients')
