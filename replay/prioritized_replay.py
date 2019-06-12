@@ -8,8 +8,8 @@ from replay.utils import add_buffer, copy_buffer
 
 class PrioritizedReplay(Replay):
     """ Interface """
-    def __init__(self, args, obs_space, action_dim):
-        super().__init__(args, obs_space, action_dim)
+    def __init__(self, args, obs_space):
+        super().__init__(args, obs_space)
         # self.memory                           # mem_idx    -->     exp
         self.data_structure = None              # prio_id   -->     priority, mem_idx
 

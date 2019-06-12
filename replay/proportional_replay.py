@@ -8,8 +8,8 @@ from replay.prioritized_replay import PrioritizedReplay
 
 class ProportionalPrioritizedReplay(PrioritizedReplay):
     """ Interface """
-    def __init__(self, args, obs_space, action_dim):
-        super().__init__(args, obs_space, action_dim)
+    def __init__(self, args, obs_space):
+        super().__init__(args, obs_space)
         self.data_structure = SumTree(self.capacity)                   # prio_id   -->     priority, exp_id
 
     """ Implementation """

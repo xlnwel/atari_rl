@@ -12,7 +12,9 @@ from basic_model.model import Model
 from env.gym_env import GymEnv, GymEnvVec
 from algo.apex.buffer import LocalBuffer
 from replay.proportional_replay import ProportionalPrioritizedReplay
-from replay.uniform_replay import UniformReplay
+# from replay.uniform_replay import UniformReplay
+from algo.rainbow_iqn.replay import ReplayBuffer as UniformReplay
+
 
 class OffPolicyOperation(Model, ABC):
     """ Abstract base class for off-policy algorithms.
@@ -51,11 +53,12 @@ class OffPolicyOperation(Model, ABC):
         buffer_args['batch_size'] = args['batch_size']
         self.buffer_type = buffer_args['type']
         if self.buffer_type == 'proportional':
-            self.buffer = ProportionalPrioritizedReplay(buffer_args, self.env.obs_space, self.n_actions)
+            self.buffer = ProportionalPrioritizedReplay(buffer_args, self.env.obs_space)
         elif self.buffer_type == 'uniform':
-            self.buffer = UniformReplay(buffer_args, self.obs_space, self.n_actions)
+            # self.buffer = UniformReplay(buffer_args, self.env.obs_space)
+            self.buffer = UniformReplay(int(float(buffer_args['capacity'])), buffer_args['frame_history_len'])
         elif self.buffer_type == 'local':
-            self.buffer = LocalBuffer(buffer_args, self.env.obs_space, self.n_actions)
+            self.buffer = LocalBuffer(buffer_args, self.env.obs_space)
 
         # arguments for prioritized replay
         self.prio_alpha = float(buffer_args['alpha'])
@@ -118,23 +121,31 @@ class OffPolicyOperation(Model, ABC):
 
     def _learn(self):
         if self.log_tensorboard:
-            priority, saved_mem_idxs, _, summary = self.sess.run([self.priority, 
+            if self.buffer_type == 'proportional':
+                priority, saved_mem_idxs, _, summary = self.sess.run([self.priority, 
                                                                 self.data['saved_mem_idxs'], 
                                                                 self.opt_op, 
                                                                 self.graph_summary])
+            else:
+                _, summary = self.sess.run([self.opt_op, self.graph_summary])
+
             if self.update_step % 100 == 0:
                 self.writer.add_summary(summary, self.update_step)
                 # self.save()
         else:
-            priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
+            if self.buffer_type == 'proportional':
+                priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
                                                         self.data['saved_mem_idxs'], 
                                                         self.opt_op])
+            else:
+                _ = self.sess.run([self.opt_op])
 
         # update the target networks
         self._update_target_net()
 
         self.update_step += 1
-        self.buffer.update_priorities(priority, saved_mem_idxs)
+        if self.buffer_type == 'proportional':
+            self.buffer.update_priorities(priority, saved_mem_idxs)
     
     """ Implementation """
     @abstractmethod

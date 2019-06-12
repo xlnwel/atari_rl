@@ -7,7 +7,7 @@ from replay.utils import init_buffer, add_buffer, copy_buffer
 
 class Replay:
     """ Interface """
-    def __init__(self, args, obs_space, action_dim):
+    def __init__(self, args, obs_space):
         self.memory = {}
 
         # params for general replay buffer
@@ -25,14 +25,14 @@ class Replay:
         self.is_full = False
         self.mem_idx = 0
 
-        init_buffer(self.memory, self.capacity, obs_space, action_dim, False)
+        init_buffer(self.memory, self.capacity, obs_space, False)
 
         # Code for single agent
         self.tb_capacity = args['tb_capacity']
         self.tb_idx = 0
         self.tb_full = False
         self.tb = {}
-        init_buffer(self.tb, self.tb_capacity, obs_space, action_dim, True)
+        init_buffer(self.tb, self.tb_capacity, obs_space, True)
         
         # locker used to avoid conflict introduced by tf.data.Dataset and multi-agent
         self.locker = threading.Lock()
@@ -149,6 +149,8 @@ class Replay:
                 if done[i % capacity]:
                     start_idx = i + 1
             missing_context = frame_history_len - (end_idx - start_idx)
+        else:
+            missing_context = 0
         # if zero padding is needed for missing context
         # or we are on the boundry of the buffer
         if start_idx < 0 or missing_context > 0:

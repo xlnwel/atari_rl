@@ -3,7 +3,7 @@ import numpy as np
 from utility.debug_tools import assert_colorize
 
 
-def init_buffer(buffer, capacity, obs_space, action_dim, has_priority):
+def init_buffer(buffer, capacity, obs_space, has_priority):
     obs_dtype = np.uint8
     action_shape = (capacity, )
     action_dtype = np.int8

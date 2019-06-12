@@ -8,8 +8,8 @@ from replay.utils import add_buffer, copy_buffer
 
 class UniformReplay(Replay):
     """ Interface """
-    def __init__(self, args, obs_space, action_space):
-        super(args, obs_space, action_space)
+    def __init__(self, args, obs_space):
+        super().__init__(args, obs_space)
 
     @override(Replay)
     def add(self, obs, action, reward,  next_obs, done):
@@ -19,5 +19,8 @@ class UniformReplay(Replay):
     @override(Replay)
     def _sample(self):
         size = self.capacity if self.is_full else self.mem_idx
-        indices = np.random.randint(0, size, self.batch_size)
-        return [v[indices] for v in self.memory.values()]
+        indexes = np.random.randint(0, size, self.batch_size)
+        
+        samples = self._get_samples(indexes)
+
+        return samples

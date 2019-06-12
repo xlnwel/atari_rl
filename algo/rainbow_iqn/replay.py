@@ -53,6 +53,14 @@ class ReplayBuffer(object):
         self.reward   = None
         self.done     = None
 
+    @property
+    def good_to_learn(self):
+        return self.num_in_buffer > 5e4
+
+    def __call__(self):
+        while True:
+            yield self.sample(32)
+
     def can_sample(self, batch_size):
         """Returns true if `batch_size` different transitions can be sampled from the buffer."""
         return batch_size + 1 <= self.num_in_buffer
@@ -60,12 +68,12 @@ class ReplayBuffer(object):
     def _encode_sample(self, idxes):
         obs_batch      = np.concatenate([self._encode_observation(idx)[None] for idx in idxes], 0)
         act_batch      = self.action[idxes]
-        rew_batch      = self.reward[idxes]
+        rew_batch      = self.reward[idxes].reshape((-1, 1))
         next_obs_batch = np.concatenate([self._encode_observation(idx + 1)[None] for idx in idxes], 0)
-        done_mask      = np.array([1.0 if self.done[idx] else 0.0 for idx in idxes], dtype=np.float32)
+        done_mask      = self.done[idxes].reshape((-1, 1))
+        step_batch     = np.ones_like(rew_batch)
 
-        return obs_batch, act_batch, rew_batch, next_obs_batch, done_mask
-
+        return obs_batch, act_batch, rew_batch, next_obs_batch, done_mask, step_batch
 
     def sample(self, batch_size):
         """Sample `batch_size` different transitions.
@@ -104,7 +112,7 @@ class ReplayBuffer(object):
         idxes = sample_n_unique(lambda: random.randint(0, self.num_in_buffer - 2), batch_size)
         return self._encode_sample(idxes)
 
-    def encode_recent_observation(self):
+    def encode_recent_obs(self, obs):
         """Return the most recent `frame_history_len` frames.
 
         Returns
@@ -115,7 +123,9 @@ class ReplayBuffer(object):
             encodes frame at time `t - frame_history_len + i`
         """
         assert self.num_in_buffer > 0
-        return self._encode_observation((self.next_idx - 1) % self.size)
+        self.obs[self.next_idx] = obs
+
+        return self._encode_observation(self.next_idx % self.size)
 
     def _encode_observation(self, idx):
         end_idx   = idx + 1 # make noninclusive
@@ -171,7 +181,7 @@ class ReplayBuffer(object):
 
         return ret
 
-    def store_effect(self, idx, action, reward, done):
+    def add(self, obs, action, reward, next_obs, done):
         """Store effects of action taken after obeserving frame stored
         at index idx. The reason `store_frame` and `store_effect` is broken
         up into two functions is so that once can call `encode_recent_observation`
@@ -188,6 +198,8 @@ class ReplayBuffer(object):
         done: bool
             True if episode was finished after performing that action.
         """
+        idx = self.store_frame(obs)
+
         self.action[idx] = action
         self.reward[idx] = reward
         self.done[idx]   = done

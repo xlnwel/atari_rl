@@ -4,7 +4,7 @@ from replay.utils import init_buffer, add_buffer, copy_buffer
 
 
 class LocalBuffer(dict):
-    def __init__(self, args, obs_space, action_dim):
+    def __init__(self, args, obs_space):
         """ The following two fake data members are only used to complete the data pipeline """
         self.fake_ratio = np.zeros(args['local_capacity'])
         self.fake_ids = np.zeros(args['local_capacity'], dtype=np.int32)
@@ -14,12 +14,12 @@ class LocalBuffer(dict):
         self.n_steps = args['n_steps']
         self.gamma = args['gamma']
 
-        init_buffer(self, self.capacity, obs_space, action_dim, True)
+        init_buffer(self, self.capacity, obs_space, True)
         self.reset()
 
         if self.n_steps > 1:
             self.tb = {}
-            init_buffer(self.tb, self.n_steps, obs_space, action_dim, False)
+            init_buffer(self.tb, self.n_steps, obs_space, False)
             self.tb_idx = 0
             self.tb_full = False
 
