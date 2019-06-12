@@ -1,20 +1,21 @@
 import numpy as np
 
-from utility.utils import assert_colorize
+from utility.debug_tools import assert_colorize
 
 
 def init_buffer(buffer, capacity, obs_space, action_dim, has_priority):
     obs_dtype = np.uint8
     action_shape = (capacity, )
     action_dtype = np.int8
-    target_buffer = {'priority': np.empty((capacity, 1))} if has_priority else {}
+    
+    target_buffer = {'priority': np.zeros((capacity, 1))} if has_priority else {}
     target_buffer.update({
         'obs': np.zeros((capacity, *obs_space), dtype=obs_dtype),
-        'action': np.empty(action_shape, dtype=action_dtype),
-        'reward': np.empty((capacity, 1), dtype=np.float16),
+        'action': np.zeros(action_shape, dtype=action_dtype),
+        'reward': np.zeros((capacity, 1), dtype=np.float16),
         'next_obs': np.zeros((capacity, *obs_space), dtype=obs_dtype),
-        'done': np.empty((capacity, 1), dtype=np.bool),
-        'steps': np.empty((capacity, 1), dtype=np.uint8)
+        'done': np.zeros((capacity, 1), dtype=np.bool),
+        'steps': np.zeros((capacity, 1), dtype=np.uint8)
     })
 
     buffer.update(target_buffer)
@@ -22,7 +23,7 @@ def init_buffer(buffer, capacity, obs_space, action_dim, has_priority):
 def reset_buffer(buffer):
     target_buffer = {}
     for k, v in buffer.items():
-        target_buffer[k] = np.empty_like(v)
+        target_buffer[k] = np.zeros_like(v)
 
     buffer.update(target_buffer)
 

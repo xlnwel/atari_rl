@@ -91,7 +91,7 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
             el = 0
 
         if t % log_steps == 0:
-            episode_scores = agent.env.get_episode_scores()
+            episode_scores = agent.env.get_episode_rewards()
             # episode_lengths = agent.env.get_episode_lengths()
             eps_len = agent.env.get_length()
             score = episode_scores[-1]

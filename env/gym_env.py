@@ -5,7 +5,7 @@ import ray
 from utility import tf_distributions
 from env.wrappers import TimeLimit
 from env.atari_wrappers import wrap_deepmind, get_wrapper_by_name
-from utility.utils import assert_colorize
+from utility.debug_tools import assert_colorize
 
 
 def action_dist_type(env):
@@ -78,7 +78,7 @@ class GymEnv:
         self.max_episode_steps = int(float(args['max_episode_steps'])) if 'max_episode_steps' in args \
                                     else env.spec.max_episode_steps
 
-    def get_episode_scores(self):
+    def get_episode_rewards(self):
         return get_wrapper_by_name(self.env, 'Monitor').get_episode_rewards()
     
     def get_episode_lengths(self):

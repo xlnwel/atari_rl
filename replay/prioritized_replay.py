@@ -1,7 +1,7 @@
 import numpy as np
 
 from utility.decorators import override
-from utility.utils import assert_colorize
+from utility.debug_tools import assert_colorize
 from replay.basic_replay import Replay
 from replay.utils import add_buffer, copy_buffer
 
@@ -38,10 +38,7 @@ class PrioritizedReplay(Replay):
 
     @override(Replay)
     def add(self, obs, action, reward, next_obs, done):
-        if self.n_steps > 1:
-            self.tb['priority'][self.tb_idx] = self.top_priority
-        else:
-            self.memory['priority'][self.mem_idx] = self.top_priority
+        self.tb['priority'][self.tb_idx] = self.top_priority
         super()._add(obs, action, reward, next_obs, done)
 
     def update_priorities(self, priorities, saved_mem_idxs):

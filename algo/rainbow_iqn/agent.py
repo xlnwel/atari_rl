@@ -38,7 +38,6 @@ class Agent(OffPolicyOperation):
     def _build_graph(self):
         self.data = self._prepare_data(self.buffer)
 
-        self._observation_preprocessing()
         self.Qnets = self._create_nets()
         self.action = self.Qnets.best_action
 

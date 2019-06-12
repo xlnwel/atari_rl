@@ -21,7 +21,7 @@ agent:
 
     frame_history_len: &fhl 4
     update_freq: 4
-    n_steps: 3
+    n_steps: 1
     loss_type: mse   # huber or mse
     target_update_freq: 10000
     
@@ -46,7 +46,7 @@ agent:
 buffer:
     atari: *atari
     frame_history_len: *fhl
-    type: proportional # local or proportional
+    type: uniform # uniform, proportional, or local
 
     alpha: 0.5
     beta0: 0.4
@@ -54,3 +54,5 @@ buffer:
     beta_steps: 1e5
     min_size: 5e4
     capacity: 1e6
+
+    tb_capacity: 4

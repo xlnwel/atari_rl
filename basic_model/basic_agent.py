@@ -7,13 +7,12 @@ import tensorflow as tf
 from ray.experimental.tf_utils import TensorFlowVariables
 
 from utility.logger import Logger
-from utility.utils import assert_colorize
+from utility.debug_tools import assert_colorize
 from basic_model.model import Model
 from env.gym_env import GymEnv, GymEnvVec
 from algo.apex.buffer import LocalBuffer
 from replay.proportional_replay import ProportionalPrioritizedReplay
-from algo.rainbow_iqn.replay import ReplayBuffer
-
+from replay.uniform_replay import UniformReplay
 
 class OffPolicyOperation(Model, ABC):
     """ Abstract base class for off-policy algorithms.
@@ -34,7 +33,6 @@ class OffPolicyOperation(Model, ABC):
                  device=None):
         # hyperparameters
         self.gamma = args['gamma'] if 'gamma' in args else .99
-        self.n_steps = args['n_steps']
         self.update_freq = args['update_freq']
         self.target_update_freq = args['target_update_freq']
         self.prefetches = args['prefetches'] if 'prefetches' in args else 0
@@ -43,8 +41,6 @@ class OffPolicyOperation(Model, ABC):
         # environment info
         self.env = (GymEnvVec(env_args) if 'n_envs' in env_args and env_args['n_envs'] > 1
                     else GymEnv(env_args))
-        
-        assert_colorize(len(self.env.obs_space) == 3, 'Frames should be images')
         h, w, c = self.env.obs_space
         self.obs_space = (h, w, args['frame_history_len'] * c)
         self.n_actions = self.env.action_dim
@@ -53,10 +49,12 @@ class OffPolicyOperation(Model, ABC):
         buffer_args['n_steps'] = args['n_steps']
         buffer_args['gamma'] = args['gamma']
         buffer_args['batch_size'] = args['batch_size']
-
-        if buffer_args['type'] == 'proportional':
+        self.buffer_type = buffer_args['type']
+        if self.buffer_type == 'proportional':
             self.buffer = ProportionalPrioritizedReplay(buffer_args, self.env.obs_space, self.n_actions)
-        elif buffer_args['type'] == 'local':
+        elif self.buffer_type == 'uniform':
+            self.buffer = UniformReplay(buffer_args, self.obs_space, self.n_actions)
+        elif self.buffer_type == 'local':
             self.buffer = LocalBuffer(buffer_args, self.env.obs_space, self.n_actions)
 
         # arguments for prioritized replay
@@ -79,13 +77,13 @@ class OffPolicyOperation(Model, ABC):
     @property
     def max_path_length(self):
         return self.env.max_episode_steps
-
+    
     def atari_learn(self, t):
         if t % self.update_freq == 0:
             self._learn()
         else:
             pass # do nothing
-    
+
     def act(self, obs, return_q=False):
         obs = self.buffer.encode_recent_obs(obs)
         obs = obs.reshape((-1, *self.obs_space))
@@ -117,6 +115,26 @@ class OffPolicyOperation(Model, ABC):
                 print(f'{self.model_name}:\tTakes {np.sum(lt):3.2f}s to learn 1000 times')
                 i = 0
                 lt = []
+
+    def _learn(self):
+        if self.log_tensorboard:
+            priority, saved_mem_idxs, _, summary = self.sess.run([self.priority, 
+                                                                self.data['saved_mem_idxs'], 
+                                                                self.opt_op, 
+                                                                self.graph_summary])
+            if self.update_step % 100 == 0:
+                self.writer.add_summary(summary, self.update_step)
+                # self.save()
+        else:
+            priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
+                                                        self.data['saved_mem_idxs'], 
+                                                        self.opt_op])
+
+        # update the target networks
+        self._update_target_net()
+
+        self.update_step += 1
+        self.buffer.update_priorities(priority, saved_mem_idxs)
     
     """ Implementation """
     @abstractmethod
@@ -124,13 +142,47 @@ class OffPolicyOperation(Model, ABC):
         raise NotImplementedError
 
     def _prepare_data(self, buffer):
+        if self.buffer_type == 'proportional':
+            return self._prepare_data_per(buffer)
+        elif self.buffer_type == 'uniform':
+            return self._prepare_data_uniform(buffer)
+
+    def _prepare_data_uniform(self, buffer):
+        with tf.name_scope('data'):
+            sample_types = (tf.float32, tf.int32, tf.float32, tf.float32, tf.float32, tf.float32)
+            sample_shapes = (
+                (None, *self.obs_space),
+                (None, ),
+                (None, 1),
+                (None, *self.obs_space),
+                (None, 1),
+                (None, 1)
+            )
+            ds = tf.data.Dataset.from_generator(buffer, sample_types, sample_shapes)
+            if self.prefetches > 0:
+                ds = ds.prefetch(self.prefetches)
+            iterator = ds.make_one_shot_iterator()
+            samples = iterator.get_next(name='samples')
+
+        obs, action, reward, next_obs, done, steps = samples
+        
+        data = {}
+        data['obs'] = obs
+        data['action'] = action
+        data['reward'] = reward
+        data['next_obs'] = next_obs
+        data['done'] = done
+        data['steps'] = steps
+
+        return data
+
+    def _prepare_data_per(self, buffer):
         with tf.name_scope('data'):
             exp_type = (tf.float32, tf.int32, tf.float32, tf.float32, tf.float32, tf.float32)
             sample_types = (tf.float32, tf.int32, exp_type)
-            action_shape =(None, ) if self.env.is_action_discrete else (None, self.n_actions)
             sample_shapes =((None), (None), (
                 (None, *self.obs_space),
-                action_shape,
+                (None, ),
                 (None, 1),
                 (None, *self.obs_space),
                 (None, 1),
@@ -143,11 +195,15 @@ class OffPolicyOperation(Model, ABC):
             samples = iterator.get_next(name='samples')
         
         # prepare data
-        IS_ratio, saved_exp_ids, (obs, action, reward, next_obs, done, steps) = samples
+        IS_ratio, saved_mem_idxs, (obs, action, reward, next_obs, done, steps) = samples
 
+        obs /= 255.
+        next_obs /= 255.
+        
         data = {}
-        data['IS_ratio'] = IS_ratio
-        data['saved_exp_ids'] = saved_exp_ids
+        data['IS_ratio'] = IS_ratio                 # Importance sampling ratio for PER
+        # saved indexes used to index the experience in the buffer when updating priorities
+        data['saved_mem_idxs'] = saved_mem_idxs     
         data['obs'] = obs
         data['action'] = action
         data['reward'] = reward
@@ -156,31 +212,6 @@ class OffPolicyOperation(Model, ABC):
         data['steps'] = steps
 
         return data
-
-    def _observation_preprocessing(self):
-        with tf.name_scope('obs_preprocessing'):
-            self.data['obs'] = self.data['obs'] / 255.
-            self.data['next_obs'] = self.data['next_obs'] / 255.
-            
-    def _learn(self):
-        if self.log_tensorboard:
-            priority, saved_exp_ids, _, summary = self.sess.run([self.priority, 
-                                                                self.data['saved_exp_ids'], 
-                                                                self.opt_op, 
-                                                                self.graph_summary])
-            if self.update_step % 100 == 0:
-                self.writer.add_summary(summary, self.update_step)
-                # self.save()
-        else:
-            priority, saved_exp_ids, _ = self.sess.run([self.priority, 
-                                                        self.data['saved_exp_ids'], 
-                                                        self.opt_op])
-
-        # update the target networks
-        self._update_target_net()
-
-        self.update_step += 1
-        self.buffer.update_priorities(priority, saved_exp_ids)
 
     def _compute_priority(self, priority):
         with tf.name_scope('priority'):
