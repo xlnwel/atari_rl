@@ -285,17 +285,13 @@ class Model(Module):
                 for i in range(times):
                     # stats logs for each worker
                     with tf.variable_scope(f'worker_{i}'):
-                        stats[i]['counter'] = counter = tf.Variable(0, trainable=False, name='counter')
-                        stats[i]['step_op'] = step_op = tf.assign(counter, counter + 1, name='counter_update')
-
                         merge_inputs = []
                         for info in stats_info:
                             stats[i][info] = info_ph = tf.placeholder(tf.float32, name=info)
                             stats[i][f'{info}_log'] = log = tf.summary.scalar(f'{info}_', info_ph)
                             merge_inputs.append(log)
                         
-                        with tf.control_dependencies([step_op]):
-                            stats[i]['log_op'] = tf.summary.merge(merge_inputs, name='log_op')
+                        stats[i]['log_op'] = tf.summary.merge(merge_inputs, name='log_op')
 
         return stats
 
@@ -328,7 +324,6 @@ class Model(Module):
             assert_colorize(k in self.stats[no], f'{k} is not a valid stats type')
             feed_dict.update({self.stats[no][k]: v})
 
-        score_count, summary = self.sess.run([self.stats[no]['counter'], self.stats[no]['log_op']], 
-                                            feed_dict=feed_dict)
+        summary = self.sess.run(self.stats[no]['log_op'], feed_dict=feed_dict)
 
-        self.writer.add_summary(summary, score_count)
+        self.writer.add_summary(summary, kwargs['t'])

@@ -44,8 +44,9 @@ class Networks(Base):
     """ Implementation """
     def _build_graph(self):
         action_fn = lambda Qs, name: tf.argmax(Qs, axis=1, name=name)
-        
-        if self.args['algo'] == 'iqn':
+        algo = self.args['algo']
+
+        if algo == 'iqn':
             net_fn = (lambda obs, n_quantiles, batch_size, name, reuse=False: 
                             self._iqn_net(obs, 
                                         n_quantiles, 
@@ -76,19 +77,17 @@ class Networks(Base):
                                                                                     self.N_prime,
                                                                                     quantile_values_next_target, 
                                                                                     Qs_next_target)
-        elif self.args['algo'] == 'duel': 
+        elif algo == 'duel': 
             net_fn = lambda obs, name, reuse=False: self._duel_net(obs, self.n_actions, name=name, reuse=reuse)
-            Qs = net_fn(self.obs, 'main')
-            Qs_next = net_fn(self.next_obs, name='main', reuse=True)
-            Qs_next_target = net_fn(self.next_obs, name='target')
 
-        elif self.args['algo'] == 'double':
+        elif algo == 'double':
             net_fn = lambda obs, name, reuse=False: self._q_net(obs, self.n_actions, name=name, reuse=reuse)
+
+        if algo == 'duel' or algo == 'double':
             Qs = net_fn(self.obs, 'main')
             Qs_next = net_fn(self.next_obs, name='main', reuse=True)
             Qs_next_target = net_fn(self.next_obs, name='target')
 
-        if self.args['algo'] == 'duel' or self.args['algo'] == 'double':
             with tf.name_scope('q_values'):
                 self.Q = tf.reduce_sum(tf.one_hot(self.action, self.n_actions) * Qs, axis=1, keepdims=True)
                 self.best_action = action_fn(Qs, 'best_action')
@@ -123,7 +122,7 @@ class Networks(Base):
         return quantiles_reformed, quantile_values, q
 
     def _psi_net(self, x, n_quantiles):
-        with tf.variable_scope('psi_net', reuse=reuse):
+        with tf.variable_scope('psi_net'):
             x = tf.layers.conv2d(x, 32, 8, 4, activation=tf.nn.relu)      # (19, 19, 32)
             x = tf.layers.conv2d(x, 64, 4, 2, activation=tf.nn.relu)      # (9, 9, 64)
             x = tf.layers.conv2d(x, 64, 3, 1, activation=tf.nn.relu)      # (7, 7, 64)
@@ -133,7 +132,7 @@ class Networks(Base):
         return x_tiled
 
     def _phi_net(self, quantiles_tiled, quantile_embedding_dim, h_dim):
-        with tf.variable_scope('phi_net', reuse=reuse):
+        with tf.variable_scope('phi_net'):
             pi = tf.constant(np.pi)
             x_quantiles = tf.cast(tf.range(1, quantile_embedding_dim + 1, 1), tf.float32) * pi * quantiles_tiled
             x_quantiles = tf.cos(x_quantiles)
@@ -142,7 +141,7 @@ class Networks(Base):
         return x_quantiles
 
     def _f_net(self, x, out_dim, n_quantiles, batch_size):
-        with tf.variable_scope('f_net', reuse=reuse):
+        with tf.variable_scope('f_net'):
             x = tf.layers.dense(x, 512, activation=tf.nn.relu)
             quantile_values = tf.layers.dense(x, out_dim)
             quantile_values = tf.reshape(quantile_values, (n_quantiles, batch_size, out_dim))

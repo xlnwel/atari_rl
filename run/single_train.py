@@ -51,7 +51,7 @@ class PiecewiseSchedule(object):
 
 def train(agent, render, log_steps, print_terminal_info=True, background_learning=True):
     n_iterations = 2e8 / 4.
-    exploration_schedule = PiecewiseSchedule([(0, 1.0), (n_iterations / 10, 0.1), (n_iterations / 2, 0.01)], 
+    exploration_schedule = PiecewiseSchedule([(0, 1.0), (1e6, 0.1), (n_iterations / 2, 0.01)], 
                                             outside_value=0.01)
     lr_schedule = PiecewiseSchedule([(0, 1e-4), (n_iterations / 10, 1e-4), (n_iterations / 2,  5e-5)],
                                     outside_value=5e-5)
@@ -65,6 +65,8 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
     best_score = -float('inf')
     el = 0
     while agent.env.get_total_steps() < 2e8:
+        el += 1
+
         idx = agent.buffer.store_frame(obs)
         if render:
             agent.env.render()
@@ -89,7 +91,6 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
             episode_lengths.append(el)
             el = 0
 
-        el += 1
         t += 1
 
         if t % log_steps == 0:
@@ -102,7 +103,7 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
             eps_len = episode_lengths[-1]
             avg_eps_len = np.mean(episode_lengths)
             if hasattr(agent, 'stats'):
-                agent.record_stats(score=score, avg_score=avg_score, eps_len=eps_len, avg_eps_len=avg_eps_len)
+                agent.record_stats(t=t, score=score, avg_score=avg_score, eps_len=eps_len, avg_eps_len=avg_eps_len)
 
             log_info = {
                 'ModelName': f'{agent.args["algorithm"]}-{agent.model_name}',
@@ -134,7 +135,7 @@ def main(env_args, agent_args, buffer_args, render=False):
         raise NotImplementedError
 
     agent_args['env_stats']['times'] = 1
-    agent = Agent('Agent', agent_args, env_args, buffer_args, log_tensorboard=True, log_stats=True, log_params=False, device='/device:GPU:0')
+    agent = Agent('Agent', agent_args, env_args, buffer_args, log_tensorboard=True, log_stats=True, log_params=False, device='/GPU:0')
     if agent_args['background_learning']:
         utils.pwc('Background Learning...')
         lt = threading.Thread(target=agent.background_learning, daemon=True)
