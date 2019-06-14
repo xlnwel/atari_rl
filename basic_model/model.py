@@ -319,6 +319,8 @@ class Model(Module):
             del kwargs['worker_no']
         
         feed_dict = {}
+        t = kwargs['t']
+        del kwargs['t']
 
         for k, v in kwargs.items():
             assert_colorize(k in self.stats[no], f'{k} is not a valid stats type')
@@ -326,4 +328,4 @@ class Model(Module):
 
         summary = self.sess.run(self.stats[no]['log_op'], feed_dict=feed_dict)
 
-        self.writer.add_summary(summary, kwargs['t'])
+        self.writer.add_summary(summary, t)

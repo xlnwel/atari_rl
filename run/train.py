@@ -80,6 +80,6 @@ if __name__ == '__main__':
 
         # Grid search happens here
         if algorithm == 'rainbow-iqn':
-            gs(type='uniform')
+            gs(type=['proportional', 'uniform'])
         else:
             raise NotImplementedError

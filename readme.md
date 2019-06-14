@@ -1,0 +1,1 @@
+A hard-won two-week lesson: convolutional layers use same padding and bias is neither used in convolutional layers nor fully connected layers

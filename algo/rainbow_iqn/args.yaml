@@ -19,7 +19,7 @@ agent:
     log_root_dir: logs  # root path for tensorboard logs
     model_name: baseline
 
-    frame_history_len: &fhl 4
+    frame_history_len: 4
     update_freq: 4
     n_steps: 1
     loss_type: huber   # huber or mse
@@ -45,13 +45,12 @@ agent:
 # argumennts for prioritized replay
 buffer:
     atari: *atari
-    frame_history_len: *fhl
     type: uniform # uniform, proportional, or local
 
     alpha: 0.5
     beta0: 0.4
     epsilon: 1e-4
-    beta_steps: 1e5
+    beta_steps: 1e6
     min_size: 5e4
     capacity: 1e6
 

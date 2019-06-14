@@ -35,6 +35,7 @@ class Agent(Model):
         self.critic_loss_type = args['loss_type']
         self.target_update_freq = args['target_update_freq']
         self.update_step = 0
+        self.algo = args['Qnets']['algo']
 
         # environment info
         self.env = (GymEnvVec(env_args) if 'n_envs' in env_args and env_args['n_envs'] > 1
@@ -47,6 +48,7 @@ class Agent(Model):
         buffer_args['n_steps'] = args['n_steps']
         buffer_args['gamma'] = args['gamma']
         buffer_args['batch_size'] = args['batch_size']
+        buffer_args['frame_history_len'] = args['frame_history_len']
         self.buffer_type = buffer_args['type']
         if self.buffer_type == 'proportional':
             self.buffer = ProportionalPrioritizedReplay(buffer_args, self.env.obs_space)
@@ -157,6 +159,9 @@ class Agent(Model):
             samples = iterator.get_next(name='samples')
 
         obs, action, reward, next_obs, done, steps = samples
+
+        obs /= 255.
+        next_obs /= 255.
         
         data = {}
         data['obs'] = obs
@@ -220,7 +225,7 @@ class Agent(Model):
         return Qnets
 
     def _loss(self):
-        if self.args['Qnets']['algo'] == 'iqn':
+        if self.algo == 'iqn':
             return self._iqn_loss()
         else:
             return self._q_loss()

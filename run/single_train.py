@@ -8,45 +8,7 @@ import numpy as np
 
 from utility import utils
 from utility.debug_tools import timeit
-
-def linear_interpolation(l, r, alpha):
-    return l + alpha * (r - l)
-
-class PiecewiseSchedule(object):
-    def __init__(self, endpoints, interpolation=linear_interpolation, outside_value=None):
-        """Piecewise schedule.
-        endpoints: [(int, int)]
-            list of pairs `(time, value)` meanining that schedule should output
-            `value` when `t==time`. All the values for time must be sorted in
-            an increasing order. When t is between two times, e.g. `(time_a, value_a)`
-            and `(time_b, value_b)`, such that `time_a <= t < time_b` then value outputs
-            `interpolation(value_a, value_b, alpha)` where alpha is a fraction of
-            time passed between `time_a` and `time_b` for time `t`.
-        interpolation: lambda float, float, float: float
-            a function that takes value to the left and to the right of t according
-            to the `endpoints`. Alpha is the fraction of distance from left endpoint to
-            right endpoint that t has covered. See linear_interpolation for example.
-        outside_value: float
-            if the value is requested outside of all the intervals sepecified in
-            `endpoints` this value is returned. If None then AssertionError is
-            raised when outside value is requested.
-        """
-        idxes = [e[0] for e in endpoints]
-        assert idxes == sorted(idxes)
-        self._interpolation = interpolation
-        self._outside_value = outside_value
-        self._endpoints      = endpoints
-
-    def value(self, t):
-        """See Schedule.value"""
-        for (l_t, l), (r_t, r) in zip(self._endpoints[:-1], self._endpoints[1:]):
-            if l_t <= t and t < r_t:
-                alpha = float(t - l_t) / (r_t - l_t)
-                return self._interpolation(l, r, alpha)
-
-        # t does not belong to any of the pieces, so doom.
-        assert self._outside_value is not None
-        return self._outside_value
+from utility.schedule import PiecewiseSchedule
 
 
 def train(agent, render, log_steps, print_terminal_info=True, background_learning=True):
@@ -55,36 +17,32 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
                                             outside_value=0.01)
     lr_schedule = PiecewiseSchedule([(0, 1e-4), (n_iterations / 10, 1e-4), (n_iterations / 2,  5e-5)],
                                     outside_value=5e-5)
-    obs = agent.env.reset()
-    t = 0
-    acttimes = deque(maxlen=log_steps)
-    envtimes = deque(maxlen=log_steps)
-    addtimes = deque(maxlen=log_steps)
-    learntimes = deque(maxlen=log_steps)
+
     episode_lengths = deque(maxlen = 100)
     best_score = -float('inf')
     el = 0
+    t = 0
+    buffer_type = agent.buffer_type
+
+    obs = agent.env.reset()
     while agent.env.get_total_steps() < 2e8:
         el += 1
 
-        idx = agent.buffer.store_frame(obs)
+        if buffer_type == 'uniform':
+            idx = agent.buffer.store_frame(obs)
         if render:
             agent.env.render()
-        if not agent.buffer.good_to_learn or np.random.random_sample() < exploration_schedule.value(t):
-            acttime, action = timeit(lambda: agent.env.random_action())
-        else:
-            acttime, action = timeit(lambda: agent.act(obs))
-        acttimes.append(acttime)
+        action = agent.act(obs) if agent.buffer.good_to_learn else agent.env.random_action()
 
-        envtime, (next_obs, reward, done, _) = timeit(lambda: agent.env.step(action))
-        envtimes.append(envtime)
+        next_obs, reward, done, _ = agent.env.step(action)
         
-        addtime, _ = timeit(lambda: agent.buffer.store_effect(idx, action, reward, done))
-        # addtime, _ = timeit(lambda: agent.add_data(obs, action, reward, next_obs, done))
-        addtimes.append(addtime)
+        if buffer_type == 'uniform':
+            agent.buffer.store_effect(idx, action, reward, done)
+        else:
+            agent.add_data(obs, action, reward, next_obs, done)
+        
         if not background_learning and agent.buffer.good_to_learn:
-            learntime, _ = timeit(lambda: agent.learn(t, lr_schedule.value(t)))
-            learntimes.append(learntime)
+            agent.learn(t, lr_schedule.value(t))
 
         obs = agent.env.reset() if done else next_obs
         if done:
@@ -95,7 +53,6 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
 
         if t % log_steps == 0:
             episode_scores = agent.env.get_episode_rewards()
-            # episode_lengths = agent.env.get_episode_lengths()
             eps_len = agent.env.get_length()
             score = episode_scores[-1]
             avg_score = np.mean(episode_scores[-100:])
@@ -109,10 +66,6 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
                 'ModelName': f'{agent.args["algorithm"]}-{agent.model_name}',
                 'Timestep': f'{(t//1000):3d}k',
                 'Iteration': len(episode_scores),
-                'ActTime': utils.timeformat(np.mean(acttimes)),
-                'EnvTime': utils.timeformat(np.mean(envtimes)),
-                'AddTime': utils.timeformat(np.mean(addtimes)),
-                'LearnTime': utils.timeformat(np.mean(learntimes) if learntimes else 0),
                 'Score': score,
                 'AvgScore': avg_score,
                 'BestScore': best_score,
@@ -135,7 +88,8 @@ def main(env_args, agent_args, buffer_args, render=False):
         raise NotImplementedError
 
     agent_args['env_stats']['times'] = 1
-    agent = Agent('Agent', agent_args, env_args, buffer_args, log_tensorboard=True, log_stats=True, log_params=False, device='/GPU:0')
+    agent = Agent('Agent', agent_args, env_args, buffer_args, 
+                log_tensorboard=True, log_stats=True, log_params=False, device='/GPU:0')
     if agent_args['background_learning']:
         utils.pwc('Background Learning...')
         lt = threading.Thread(target=agent.background_learning, daemon=True)

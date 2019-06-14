@@ -1,10 +1,10 @@
 import numpy as np
-from replay.ds.container import Container
 
-class SumTree(Container):
+
+class SumTree:
     """ Interface """
     def __init__(self, capacity):
-        super().__init__(capacity)
+        self.capacity = capacity
         self.prio_id = 0
         self.full = False
         # expect the first capacity - 1 elements in self.container are of type np.array([])
