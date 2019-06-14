@@ -13,7 +13,7 @@ class ProportionalPrioritizedReplay(Replay):
     def __init__(self, args, obs_space):
         super().__init__(args, obs_space)
         # self.memory                                   # mem_idx    -->     exp
-        self.data_structure = SumTree(self.capacity)    # prio_id   -->     priority, exp_id
+        self.data_structure = SumTree(self.capacity)    # mem_idx    -->     priority
 
         # params for prioritized replay
         self.alpha = float(args['alpha']) if 'alpha' in args else .5
@@ -34,8 +34,7 @@ class ProportionalPrioritizedReplay(Replay):
         with self.locker:        
             samples = self._sample()
             self.sample_i += 1
-            if self.sample_i % 100 == 0:
-                self._update_beta()
+            self._update_beta()
 
         return samples
 
@@ -57,16 +56,10 @@ class ProportionalPrioritizedReplay(Replay):
     @override(Replay)
     def _merge(self, local_buffer, length, start=0):
         end_idx = self.mem_idx + length
-        for prio_id, mem_idx in enumerate(range(self.mem_idx, end_idx)):
-            self.data_structure.add(local_buffer['priority'][prio_id], mem_idx % self.capacity, self.is_full)
+        for idx, mem_idx in enumerate(range(self.mem_idx, end_idx)):
+            self.data_structure.update(local_buffer['priority'][idx], mem_idx % self.capacity)
             
         super()._merge(local_buffer, length, start)
-        
-    def _compute_IS_ratios(self, N, probabilities):
-        IS_ratios = np.power(probabilities * N, -self.beta)
-        IS_ratios /= np.max(IS_ratios)  # normalize ratios to avoid scaling the update upward
-
-        return IS_ratios
     
     @override(Replay)
     def _sample(self):
@@ -77,7 +70,7 @@ class ProportionalPrioritizedReplay(Replay):
         priorities, indexes = list(zip(*[self.data_structure.find(np.random.uniform(i * segment, (i+1) * segment))
                                         for i in range(self.batch_size)]))
 
-        priorities = np.squeeze(priorities)
+        priorities = np.array(priorities)
         probabilities = priorities / total_priorities
 
         # compute importance sampling ratios
@@ -86,3 +79,9 @@ class ProportionalPrioritizedReplay(Replay):
         samples = self._get_samples(indexes)
         
         return IS_ratios, indexes, samples
+
+    def _compute_IS_ratios(self, N, probabilities):
+        IS_ratios = (probabilities * N) ** -self.beta
+        IS_ratios /= np.max(IS_ratios)  # normalize ratios to avoid scaling the update upward
+
+        return IS_ratios

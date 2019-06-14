@@ -30,7 +30,7 @@ class Networks(Module):
         super().__init__(name, 
                          args, 
                          graph, 
-                         log_tensorboard=log_tensorboard,
+                         log_tensorboard=log_tensorboard, 
                          log_params=log_params)
 
     @property
