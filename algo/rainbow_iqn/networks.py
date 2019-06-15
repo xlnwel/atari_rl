@@ -22,6 +22,8 @@ class Networks(Module):
         self.reward = data['reward']
         self.n_actions = n_actions
         self.batch_size = args['batch_size']
+
+        self.use_noisy = args['noisy']
         self.N = args['N']                          # N in paper, num of quantiles for online quantile network
         self.N_prime = args['N_prime']              # N' in paper, num of quantiles for target quantile network
         self.K = args['K']                          # K in paper, num of quantiles for action selection
@@ -200,9 +202,11 @@ class Networks(Module):
 
     def _fc_net(self, x, out_dim, name=None):
         def net(x, out_dim):
-            x = tf.layers.dense(x, 512, use_bias=False, activation=tf.nn.relu)
-            x = tf.layers.dense(x, out_dim, use_bias=False)
-
+            layer = self.noisy if self.use_noisy else tf.layers.dense
+            name_fn = lambda i: f'noisy_{i}' if self.use_noisy else f'dense_{i}'
+            x = layer(x, 512, use_bias=False, name=name_fn(1))
+            x = tf.nn.relu(x)
+            x = layer(x, out_dim, use_bias=False, name=name_fn(2))
             return x
         if name:
             with tf.variable_scope(name):

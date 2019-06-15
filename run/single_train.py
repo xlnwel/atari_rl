@@ -23,16 +23,25 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
     el = 0
     t = 0
     buffer_type = agent.buffer_type
-
+    itrtimes = deque(maxlen=1000)
+    
     obs = agent.env.reset()
     while agent.env.get_total_steps() < 2e8:
+        t += 1
         el += 1
+
+        start = time.time()
 
         if buffer_type == 'uniform':
             idx = agent.buffer.store_frame(obs)
         if render:
             agent.env.render()
-        action = agent.act(obs) if agent.buffer.good_to_learn else agent.env.random_action()
+        if agent.Qnets.use_noisy:
+            action = agent.act(obs) if agent.buffer.good_to_learn else agent.env.random_action()
+        else:
+            action = (agent.act(obs) 
+                    if agent.buffer.good_to_learn and np.random.sample() > exploration_schedule.value(t) 
+                    else agent.env.random_action())
 
         next_obs, reward, done, _ = agent.env.step(action)
         
@@ -49,10 +58,13 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
             episode_lengths.append(el)
             el = 0
 
-        t += 1
-
         if t % log_steps == 0:
+            # bookkeeping
+            itrtime = (time.time() - start) / log_steps
+            itrtimes.append(itrtime)
             episode_scores = agent.env.get_episode_rewards()
+            if not episode_scores:
+                continue
             eps_len = agent.env.get_length()
             score = episode_scores[-1]
             avg_score = np.mean(episode_scores[-100:])
@@ -66,6 +78,7 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
                 'ModelName': f'{agent.args["algorithm"]}-{agent.model_name}',
                 'Timestep': f'{(t//1000):3d}k',
                 'Iteration': len(episode_scores),
+                'IterationTime': utils.timeformat(np.mean(itrtimes)) + 's',
                 'Score': score,
                 'AvgScore': avg_score,
                 'BestScore': best_score,

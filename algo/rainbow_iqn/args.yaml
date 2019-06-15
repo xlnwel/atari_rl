@@ -26,9 +26,9 @@ agent:
     target_update_freq: 10000
     
     Qnets:
-        duel: False
+        noisy: True
         noisy_sigma: 0.5    # standard deviation for noisy layers
-        algo: double
+        algo: iqn           # double, duel, or iqn
         N: 8                # N in paper, num of quantiles for online quantile network
         N_prime: 8          # N' in paper, num of quantiles for target quantile network
         K: 32               # K in paper, num of quantiles for action selection
