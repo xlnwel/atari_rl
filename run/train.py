@@ -68,4 +68,4 @@ if __name__ == '__main__':
         if cmd_args.environment:
             gs.env_args['name'] = cmd_args.environment
         # Grid search happens here
-        gs(algorithm=['duel', 'iqn'])
+        gs()

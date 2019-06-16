@@ -1,3 +1,5 @@
+In this project, we implement Rainbow and replace c51 in Rainbow with IQN.
+
 ## Algorithm Implemented
 
 - [x] Rainbow   (except c51)

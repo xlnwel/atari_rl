@@ -52,7 +52,8 @@ class Networks(Module):
             
             return action
 
-        if algo == 'iqn':
+        if 'iqn' in algo:
+            rainbow = True if 'rainbow' in algo else False
             net_fn = (lambda obs, n_quantiles, batch_size, name, reuse=False: 
                             self._iqn_net(obs, 
                                         n_quantiles, 
@@ -62,11 +63,12 @@ class Networks(Module):
                                         self._phi_net,
                                         self._f_net,
                                         name=name, 
+                                        rainbow=rainbow,
                                         reuse=reuse))
             # online IQN network
             quantiles, quantile_values, Qs = net_fn(self.obs, self.N, self.batch_size, 'main')
             # Qs for online action selection
-            _, _, Qs_online = net_fn(self.obs, self.K, 1, 'main', reuse=True)      
+            _, _, Qs_online = net_fn(self.obs, self.K, 1, 'main', reuse=True)
             # target IQN network
             _, quantile_values_next_target, Qs_next_target = net_fn(self.next_obs, self.N_prime, self.batch_size, 'target')
             # next online Qs for double Q action selection
@@ -102,7 +104,8 @@ class Networks(Module):
                                                     * Qs_next_target, axis=1, keepdims=True)
 
     """ IQN """
-    def _iqn_net(self, x, n_quantiles, batch_size, out_dim, psi_net, phi_net, f_net, name, reuse=None):
+    def _iqn_net(self, x, n_quantiles, batch_size, out_dim, 
+                psi_net, phi_net, f_net, name, rainbow=False, reuse=None):
         quantile_embedding_dim = self.args['quantile_embedding_dim']
 
         with tf.variable_scope(name, reuse=reuse):
@@ -124,7 +127,16 @@ class Networks(Module):
             # Combine outputs of psi and phi
             y = x_tiled * x_quantiles
             # f function in the paper
-            quantile_values, q = f_net(y, out_dim, n_quantiles, batch_size)
+            if rainbow:
+                v_qv, v = f_net(y, out_dim, n_quantiles, batch_size, name='V')
+                a_qv, a = f_net(y, out_dim, n_quantiles, batch_size, name='A')
+
+                with tf.name_scope('q'):
+                    quantile_values = v_qv + a_qv - tf.reduce_mean(a_qv, axis=2, keepdims=True)
+                    q = v + a - tf.reduce_mean(a, axis=1, keepdims=True)
+
+            else:
+                quantile_values, q = f_net(y, out_dim, n_quantiles, batch_size)
 
         return quantiles_reformed, quantile_values, q
 
@@ -144,8 +156,9 @@ class Networks(Module):
 
         return x_quantiles
 
-    def _f_net(self, x, out_dim, n_quantiles, batch_size):
-        with tf.variable_scope('f_net'):
+    def _f_net(self, x, out_dim, n_quantiles, batch_size, name=None):
+        name = f'{name}_f_net' if name else 'f_net'
+        with tf.variable_scope(name):
             quantile_values = self._fc_net(x, out_dim)
             quantile_values = tf.reshape(quantile_values, (n_quantiles, batch_size, out_dim))
             q = tf.reduce_mean(quantile_values, axis=0)

@@ -3,13 +3,13 @@ n_experiments: 0 # 1 run the following configuration, otherwise, run test code i
 env:
     atari: &atari True
     video_path: video
-    name: &env_name PongNoFrameskip-v4
+    name: &env_name MontezumaRevengeNoFrameskip-v0
     max_episode_steps: 1000
     seed: 0
 agent:
     background_learning: False
     gamma: &gamma 0.99
-    algorithm: iqn          # double, duel, or iqn. this could be overwritten by the command argument algorithm
+    algorithm: rainbow-iqn  # double, duel, iqn. or rainbow-iqn, this could be overwritten by the command argument algorithm
     batch_size: 32
     prefetches: 5
 
