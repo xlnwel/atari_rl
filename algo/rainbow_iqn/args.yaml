@@ -3,13 +3,13 @@ n_experiments: 0 # 1 run the following configuration, otherwise, run test code i
 env:
     atari: &atari True
     video_path: video
-    name: &env_name PongNoFrameskip-v4    # PongNoFrameskip-v4
+    name: &env_name PongNoFrameskip-v4
     max_episode_steps: 1000
     seed: 0
 agent:
     background_learning: False
     gamma: &gamma 0.99
-    algo: iqn               # double, duel, or iqn. this could be overwritten by the command argument algorithm
+    algorithm: iqn          # double, duel, or iqn. this could be overwritten by the command argument algorithm
     batch_size: 32
     prefetches: 5
 
@@ -21,7 +21,7 @@ agent:
 
     frame_history_len: 4
     update_freq: 4
-    n_steps: 1
+    n_steps: 3
     loss_type: huber   # huber or mse
     target_update_freq: 10000
     
@@ -44,7 +44,7 @@ agent:
 # argumennts for prioritized replay
 buffer:
     atari: *atari
-    type: uniform # uniform, proportional, or local
+    type: proportional      # uniform, proportional, or local
 
     alpha: 0.5
     beta0: 0.4
@@ -53,4 +53,4 @@ buffer:
     min_size: 5e4
     capacity: 1e6
 
-    tb_capacity: 4
+    tb_capacity: 100

@@ -35,7 +35,7 @@ class Agent(Model):
         self.critic_loss_type = args['loss_type']
         self.target_update_freq = args['target_update_freq']
         self.update_step = 0
-        self.algo = args['algo']
+        self.algo = args['algorithm']
 
         # environment info
         self.env = (GymEnvVec(env_args) if 'n_envs' in env_args and env_args['n_envs'] > 1

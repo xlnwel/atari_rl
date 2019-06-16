@@ -136,7 +136,7 @@ class Replay:
         obs = np.stack([self._encode_obs(idx, self.memory['obs'], self.memory['done'],
                         self.frame_history_len, self.is_full, self.capacity) for idx in indexes])
         # squeeze steps since it is of shape [None, 1]
-        next_indexes = indexes + np.squeeze(self.memory['steps'][indexes])
+        next_indexes = (indexes + np.squeeze(self.memory['steps'][indexes])) % self.capacity
         next_obs = np.stack([self._encode_obs(idx, self.memory['obs'], self.memory['done'],
                               self.frame_history_len, self.is_full, self.capacity) for idx in next_indexes])
         # use zero obs as terminal obs

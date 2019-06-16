@@ -15,7 +15,10 @@ def parse_cmd_args():
     parser.add_argument('--algorithm', '-a',
                         type=str,
                         choices=['double', 'dule', 'iqn'],
-                        default='None')
+                        default=None)
+    parser.add_argument('--environment', '-e',
+                        type=str,
+                        default=None)
     parser.add_argument('--render', '-r',
                         type=str,
                         choices=['true', 'false'],
@@ -61,7 +64,8 @@ if __name__ == '__main__':
         gs = GridSearch(arg_file, main, render=render, n_trials=cmd_args.trials, dir_prefix=prefix)
 
         if cmd_args.algorithm:
-            gs.agent_args['algo'] = cmd_args.algorithm
+            gs.agent_args['algorithm'] = cmd_args.algorithm
+        if cmd_args.environment:
+            gs.env_args['name'] = cmd_args.environment
         # Grid search happens here
-        gs(Qnets=dict(algo=['double']), type='proportional', tb_capacity=[4, 10, 100])
-
+        gs(algorithm=['duel', 'iqn'])
