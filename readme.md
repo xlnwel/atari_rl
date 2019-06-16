@@ -11,6 +11,22 @@
 
 Algorithms are implemented in [algo](https://github.com/xlnwel/atari_rl/tree/master/algo)
 
+## Requirements
+
+It is recommended to install Tensorflow from source following [this instruction](https://www.tensorflow.org/install/source) to gain some CPU boost and other potential benefits.
+
+```shell
+# Minimal requirements to run the algorithms. Tested on Ubuntu 18.04.2, using Tensorflow 1.13.1.
+# Forget the deprecated warnings... This project is not designed according to Tensorflow 2.X
+conda create -n gym python
+conda activate gym
+pip install -r requirements.txt
+# install gym atari
+pip install 'gym[atari]'
+# Install tensorflow-gpu or install it from scratch as the above instruction suggests
+pip install tensorflow-gpu
+```
+
 ## Running
 
 ```shell
@@ -29,10 +45,16 @@ python run/train.py
 ## Details
 
 All tests are done in [PongNoFrameskip-v4](https://gym.openai.com/envs/Pong-v0/), 
-1. A hard-won two-week lesson: 
+1. A hard-won one-week lesson: 
     1. convolutional layers use same padding
     2. bias is neither used in convolutional layers nor fully connected layers
 
 2. Zero states are used as terminal states.
 
 3. Arguments from homework3 of UCB [cs294-112](http://rail.eecs.berkeley.edu/deeprlcourse/).
+
+## References
+
+[Homework of Berkeley CS291-112](http://rail.eecs.berkeley.edu/deeprlcourse/)
+
+[Google Dopamine](https://github.com/google/dopamine)
