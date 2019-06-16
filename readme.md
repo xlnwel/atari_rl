@@ -6,7 +6,7 @@
 ## Overall Architecture
 
 <p align="center">
-<img src="/results/Architecture.png" alt="average score in tensorboard" height="650">
+<img src="/Architecture.png" alt="Architecture" height="650">
 </p>
 
 Algorithms are implemented in [algo](https://github.com/xlnwel/atari_rl/tree/master/algo)
