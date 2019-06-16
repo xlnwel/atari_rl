@@ -77,17 +77,17 @@ class Replay:
         with self.locker:
             self._merge(local_buffer, length, start)
 
-    def add(self, obs, action, reward, next_obs, done):
+    def add(self, obs, action, reward, done):
         """ Add a single transition to the replay buffer """
         # locker should be handled in implementation
         raise NotImplementedError
 
     """ Implementation """
-    def _add(self, obs, action, reward, next_obs, done):
+    def _add(self, obs, action, reward, done):
         """ add is only used for single agent, no multiple adds are expected to run at the same time
             but it may fight for resource with self.sample if background learning is enabled """
         add_buffer(self.tb, self.tb_idx, obs, action, reward, 
-                    next_obs, done, self.n_steps, self.gamma)
+                    done, self.n_steps, self.gamma)
         
         if not self.tb_full and self.tb_idx == self.tb_capacity - 1:
             self.tb_full = True
@@ -99,9 +99,8 @@ class Replay:
             self.tb_full = False
             self.tb_idx = 0
         elif self.tb_full:
-            # add the oldest ready experience in temporary buffer to memory
-            # this implementation speeds up the 
-            n_not_ready = self.n_steps - 1
+            # add the ready experiences in temporary buffer to memory
+            n_not_ready = max(self.frame_history_len, self.n_steps) - 1
             n_ready = self.tb_capacity - n_not_ready
             self.merge(self.tb, n_ready, self.tb_idx)
             assert self.tb_idx == 0
@@ -136,8 +135,13 @@ class Replay:
 
         obs = np.stack([self._encode_obs(idx, self.memory['obs'], self.memory['done'],
                         self.frame_history_len, self.is_full, self.capacity) for idx in indexes])
-        next_obs = np.stack([self._encode_obs(idx, self.memory['next_obs'], self.memory['done'],
-                              self.frame_history_len, self.is_full, self.capacity) for idx in indexes])
+        # squeeze steps since it is of shape [None, 1]
+        next_indexes = indexes + np.squeeze(self.memory['steps'][indexes])
+        next_obs = np.stack([self._encode_obs(idx, self.memory['obs'], self.memory['done'],
+                              self.frame_history_len, self.is_full, self.capacity) for idx in next_indexes])
+        # use zero obs as terminal obs
+        next_obs = np.where(np.expand_dims(np.expand_dims(self.memory['done'][indexes], axis=2), axis=3), 
+                            np.zeros_like(obs), next_obs)
 
         return (
             obs,

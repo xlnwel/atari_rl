@@ -9,7 +9,7 @@ env:
 agent:
     background_learning: False
     gamma: &gamma 0.99
-    algorithm: rainbow-iqn
+    algo: iqn               # double, duel, or iqn. this could be overwritten by the command argument algorithm
     batch_size: 32
     prefetches: 5
 
@@ -28,7 +28,6 @@ agent:
     Qnets:
         noisy: True
         noisy_sigma: 0.5    # standard deviation for noisy layers
-        algo: iqn           # double, duel, or iqn
         N: 8                # N in paper, num of quantiles for online quantile network
         N_prime: 8          # N' in paper, num of quantiles for target quantile network
         K: 32               # K in paper, num of quantiles for action selection

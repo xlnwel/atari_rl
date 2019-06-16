@@ -13,7 +13,6 @@ def init_buffer(buffer, capacity, obs_space, has_priority):
         'obs': np.zeros((capacity, *obs_space), dtype=obs_dtype),
         'action': np.zeros(action_shape, dtype=action_dtype),
         'reward': np.zeros((capacity, 1), dtype=np.float16),
-        'next_obs': np.zeros((capacity, *obs_space), dtype=obs_dtype),
         'done': np.zeros((capacity, 1), dtype=np.bool),
         'steps': np.zeros((capacity, 1), dtype=np.uint8)
     })
@@ -27,11 +26,10 @@ def reset_buffer(buffer):
 
     buffer.update(target_buffer)
 
-def add_buffer(buffer, idx, obs, action, reward, next_obs, done, n_steps, gamma):
+def add_buffer(buffer, idx, obs, action, reward, done, n_steps, gamma):
     buffer['obs'][idx] = obs
     buffer['action'][idx] = action
     buffer['reward'][idx] = reward
-    buffer['next_obs'][idx] = next_obs
     buffer['done'][idx] = done
     buffer['steps'][idx] = 1
     # Update previous experience if multi-step is required
@@ -41,7 +39,6 @@ def add_buffer(buffer, idx, obs, action, reward, next_obs, done, n_steps, gamma)
             # Do not continue updating when done is encountered
             break
         buffer['reward'][k] += gamma**i * reward
-        buffer['next_obs'][k] = next_obs
         buffer['done'][k] = done
         buffer['steps'][k] += 1
 

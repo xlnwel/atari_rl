@@ -9,6 +9,7 @@ import numpy as np
 from utility import utils
 from utility.debug_tools import timeit
 from utility.schedule import PiecewiseSchedule
+from algo.rainbow_iqn.agent import Agent
 
 
 def train(agent, render, log_steps, print_terminal_info=True, background_learning=True):
@@ -48,7 +49,7 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
         if buffer_type == 'uniform':
             agent.buffer.store_effect(idx, action, reward, done)
         else:
-            agent.add_data(obs, action, reward, next_obs, done)
+            agent.add_data(obs, action, reward, done)
         
         if not background_learning and agent.buffer.good_to_learn:
             agent.learn(t, lr_schedule.value(t))
@@ -93,12 +94,6 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
 def main(env_args, agent_args, buffer_args, render=False):
     # print terminal information if main is running in the main thread
     utils.set_global_seed()
-
-    algorithm = agent_args['algorithm']
-    if algorithm == 'rainbow-iqn':
-        from algo.rainbow_iqn.agent import Agent
-    else:
-        raise NotImplementedError
 
     agent_args['env_stats']['times'] = 1
     agent = Agent('Agent', agent_args, env_args, buffer_args, 

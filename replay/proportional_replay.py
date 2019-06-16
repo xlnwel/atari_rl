@@ -39,10 +39,10 @@ class ProportionalPrioritizedReplay(Replay):
         return samples
 
     @override(Replay)
-    def add(self, obs, action, reward, next_obs, done):
+    def add(self, obs, action, reward, done):
         self.tb['priority'][self.tb_idx] = self.top_priority
 
-        super()._add(obs, action, reward, next_obs, done)
+        super()._add(obs, action, reward, done)
 
     def update_priorities(self, priorities, saved_mem_idxs):
         with self.locker:

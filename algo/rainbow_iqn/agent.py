@@ -35,7 +35,7 @@ class Agent(Model):
         self.critic_loss_type = args['loss_type']
         self.target_update_freq = args['target_update_freq']
         self.update_step = 0
-        self.algo = args['Qnets']['algo']
+        self.algo = args['algo']
 
         # environment info
         self.env = (GymEnvVec(env_args) if 'n_envs' in env_args and env_args['n_envs'] > 1
@@ -97,8 +97,8 @@ class Agent(Model):
         
         return np.squeeze(action)
 
-    def add_data(self, obs, action, reward, next_obs, done):
-        self.buffer.add(obs, action, reward, next_obs, done)
+    def add_data(self, obs, action, reward, done):
+        self.buffer.add(obs, action, reward, done)
 
     def background_learning(self):
         from utility.debug_tools import timeit
@@ -213,6 +213,7 @@ class Agent(Model):
     def _create_nets(self):
         scope_prefix = self.name
         self.args['Qnets']['batch_size'] = self.args['batch_size']
+        self.args['Qnets']['algo'] = self.algo
         Qnets = Networks('Nets', 
                         self.args['Qnets'], 
                         self.graph, 
