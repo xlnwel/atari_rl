@@ -51,7 +51,7 @@ All tests are done in [PongNoFrameskip-v4](https://gym.openai.com/envs/Pong-v0/)
 
 2. Zero states are used as terminal states.
 
-3. Arguments from homework3 of UCB [cs294-112](http://rail.eecs.berkeley.edu/deeprlcourse/).
+3. Best arguments are kept in `args.yaml`. Most arguments are from the reference paper, learning rate schedule is from homework3 of UCB [cs294-112](http://rail.eecs.berkeley.edu/deeprlcourse/).
 
 ## Paper References
 
