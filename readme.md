@@ -53,7 +53,21 @@ All tests are done in [PongNoFrameskip-v4](https://gym.openai.com/envs/Pong-v0/)
 
 3. Arguments from homework3 of UCB [cs294-112](http://rail.eecs.berkeley.edu/deeprlcourse/).
 
-## References
+## Paper References
+
+Dan Horgan et al. Distributed Prioritized Experience Replay 
+
+Hado van Hasselt et al. Deep Reinforcement Learning with Double Q-Learning
+
+Tom Schaul et al. Prioritized Experience Replay
+
+Meire Fortunato et al. Noisy Networks For Exploration
+
+Ziyu Wang et la. Dueling Network Architectures for Deep Reinforcement Learning
+
+Will Dabney et al. Implicit Quantile Networks for Distributional Reinforcement Learning
+
+## Code References
 
 [Homework of Berkeley CS291-112](http://rail.eecs.berkeley.edu/deeprlcourse/)
 
