@@ -92,11 +92,12 @@ class Module(Layer):
 
     def _adam_optimizer(self, opt_step=None, schedule_lr=False):
         # params for optimizer
-        learning_rate = float(self.args['learning_rate'])
+        if not schedule_lr:
+            learning_rate = float(self.args['learning_rate'])
+            decay_rate = float(self.args['decay_rate']) if 'decay_rate' in self.args else 1.
+            decay_steps = float(self.args['decay_steps']) if 'decay_steps' in self.args else 1e6
         beta1 = float(self.args['beta1']) if 'beta1' in self.args else 0.9
         beta2 = float(self.args['beta2']) if 'beta2' in self.args else 0.999
-        decay_rate = float(self.args['decay_rate']) if 'decay_rate' in self.args else 1.
-        decay_steps = float(self.args['decay_steps']) if 'decay_steps' in self.args else 1e6
         epsilon = float(self.args['epsilon']) if 'epsilon' in self.args else 1e-8
 
         # setup optimizer
@@ -107,15 +108,11 @@ class Module(Layer):
 
         if schedule_lr:
             learning_rate = tf.placeholder(tf.float32, (), name='learning_rate')
-        if decay_rate == 1.:
-            optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=beta1, beta2=beta2)
-        else:
-            if not schedule_lr:
-                learning_rate = tf.train.exponential_decay(learning_rate, opt_step, decay_steps, decay_rate, staircase=True)
-            optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=beta1, beta2=beta2, epsilon=epsilon)
-
-            if self.log_tensorboard:
+        elif decay_rate != 1.:
+            learning_rate = tf.train.exponential_decay(learning_rate, opt_step, decay_steps, decay_rate, staircase=True)
+        if self.log_tensorboard and not isinstance(learning_rate, float):
                 tf.summary.scalar('learning_rate_', learning_rate)
+        optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=beta1, beta2=beta2, epsilon=epsilon)
 
         return optimizer, learning_rate, opt_step
 
@@ -199,8 +196,8 @@ class Model(Module):
         # initialize session and global variables
         if sess_config is None:
             if 'n_workers' in args and args['n_workers'] > 1:
-                sess_config = tf.ConfigProto(intra_op_parallelism_threads=2,
-                                             inter_op_parallelism_threads=2,
+                sess_config = tf.ConfigProto(intra_op_parallelism_threads=1,
+                                             inter_op_parallelism_threads=1,
                                              allow_soft_placement=True)
             else:
                 sess_config = tf.ConfigProto(allow_soft_placement=True)
@@ -215,6 +212,8 @@ class Model(Module):
             self.saver = self._setup_saver(save)
             self.model_file = self._setup_model_path(args['model_root_dir'], self.model_name)
             self.restore(self.model_file)
+        else:
+            pwc('No saver is available')
     
     @property
     def global_variables(self):
@@ -243,9 +242,7 @@ class Model(Module):
     def save(self):
         if hasattr(self, 'saver'):
             return self.saver.save(self.sess, self.model_file)
-        else:
-            # no intention to treat no saver as an error, just print a warning message
-            pwc('No saver is available')
+        # no intention to treat no saver as an error, just print a warning message
 
     def record_stats(self, **kwargs):
         self._record_stats_impl(kwargs)

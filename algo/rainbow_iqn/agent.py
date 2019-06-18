@@ -11,8 +11,7 @@ from utility.tf_utils import n_step_target, stats_summary
 from env.gym_env import GymEnv, GymEnvVec
 from algo.apex.buffer import LocalBuffer
 from replay.proportional_replay import ProportionalPrioritizedReplay
-# from replay.uniform_replay import UniformReplay
-from algo.rainbow_iqn.replay import ReplayBuffer as UniformReplay
+from replay.uniform_replay import UniformReplay
 
 
 class Agent(Model):
@@ -53,8 +52,9 @@ class Agent(Model):
         if self.buffer_type == 'proportional':
             self.buffer = ProportionalPrioritizedReplay(buffer_args, self.env.obs_space)
         elif self.buffer_type == 'uniform':
-            self.buffer = UniformReplay(int(1e6), 4)
+            self.buffer = UniformReplay(buffer_args, self.env.obs_space)
         elif self.buffer_type == 'local':
+            buffer_args['local_capacity'] = self.env.max_episode_steps
             self.buffer = LocalBuffer(buffer_args, self.env.obs_space)
 
         # arguments for prioritized replay
@@ -85,17 +85,24 @@ class Agent(Model):
         else:
             return
 
-    def act(self, obs, return_q=False):
+    def act(self, obs, random_act=False, return_q=False):
         obs = self.buffer.encode_recent_obs(obs)
         obs = obs.reshape((-1, *self.obs_space))
-        if return_q:
+        feed_dict = {self.data['obs']: obs}
+        if random_act and return_q:
+            action = self.env.random_action()
+            q = self.sess.run(self.Qnets.Q, feed_dict=feed_dict)
+            return action, np.squeeze(q)
+        elif not random_act and return_q:
             action, q = self.sess.run([self.action, self.Qnets.Q], 
-                                        feed_dict={self.data['obs']: obs})
-            return np.squeeze(action), q
+                                        feed_dict=feed_dict)
+            return np.squeeze(action), np.squeeze(q)
+        elif random_act:
+            action = self.env.random_action()
+            return action
         else:
-            action = self.sess.run(self.action, feed_dict={self.data['obs']: obs})
-        
-        return np.squeeze(action)
+            action = self.sess.run(self.action, feed_dict=feed_dict)
+            return np.squeeze(action)
 
     def add_data(self, obs, action, reward, done):
         self.buffer.add(obs, action, reward, done)
@@ -105,16 +112,16 @@ class Agent(Model):
         while not self.buffer.good_to_learn:
             time.sleep(1)
         print('Start Learning...')
-        
-        i = 0
+
+        t = 0
         lt = []
         while True:
-            i += 1
-            duration, _ = timeit(self.learn)
+            t += 1
+            duration, _ = timeit(self._learn)
             lt.append(duration)
-            if i % 1000 == 0:
+            if t % 1000 == 0:
                 print(f'{self.model_name}:\tTakes {np.sum(lt):3.2f}s to learn 1000 times')
-                i = 0
+                t = 0
                 lt = []
 
     """ Implementation """
@@ -128,7 +135,7 @@ class Agent(Model):
 
         self.opt_op, self.learning_rate, self.opt_step = self.Qnets._optimization_op(self.loss, 
                                                                             tvars=self.Qnets.main_variables,
-                                                                            opt_step=True, schedule_lr=True)
+                                                                            opt_step=True, schedule_lr=self.Qnets.args['schedule_lr'])
 
         # target net operations
         self.init_target_op, self.update_target_op = self._target_net_ops()
@@ -136,10 +143,12 @@ class Agent(Model):
         self._log_loss()
 
     def _prepare_data(self):
-        if self.buffer_type == 'proportional':
-            return self._prepare_data_per()
-        elif self.buffer_type == 'uniform':
+        if self.buffer_type == 'uniform' or self.buffer_type == 'local':
             return self._prepare_data_uniform()
+        elif self.buffer_type == 'proportional':
+            return self._prepare_data_per()
+        else:
+            raise NotImplementedError
 
     def _prepare_data_uniform(self):
         with tf.name_scope('data'):
@@ -190,7 +199,7 @@ class Agent(Model):
                 ds = ds.prefetch(self.prefetches)
             iterator = ds.make_one_shot_iterator()
             samples = iterator.get_next(name='samples')
-        
+
         # prepare data
         IS_ratio, saved_mem_idxs, (obs, action, reward, next_obs, done, steps) = samples
 
@@ -317,31 +326,35 @@ class Agent(Model):
             with tf.name_scope('networks'):
                 stats_summary(self.Qnets.Q, 'Q')
 
-    def _learn(self, lr):
+    def _learn(self, lr=None):
+        if lr:
+            feed_dict = {self.learning_rate: lr}
+        else:
+            feed_dict = {}
+
         if self.log_tensorboard:
             if self.buffer_type == 'proportional':
                 priority, saved_mem_idxs, _, summary = self.sess.run([self.priority, 
-                                                                self.data['saved_mem_idxs'], 
-                                                                self.opt_op, 
-                                                                self.graph_summary], 
-                                                                feed_dict={self.learning_rate: lr})
+                                                                    self.data['saved_mem_idxs'], 
+                                                                    self.opt_op, 
+                                                                    self.graph_summary], 
+                                                                    feed_dict=feed_dict)
             else:
-                _, summary = self.sess.run([self.opt_op, self.graph_summary], feed_dict={self.learning_rate: lr})
+                _, summary = self.sess.run([self.opt_op, self.graph_summary], feed_dict=feed_dict)
 
             if self.update_step % 100 == 0:
                 self.writer.add_summary(summary, self.update_step)
-                # self.save()
+                self.save()
         else:
             if self.buffer_type == 'proportional':
                 priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
-                                                        self.data['saved_mem_idxs'], 
-                                                        self.opt_op])
+                                                            self.data['saved_mem_idxs'], 
+                                                            self.opt_op], feed_dict=feed_dict)
             else:
-                _ = self.sess.run([self.opt_op])
+                _ = self.sess.run([self.opt_op], feed_dict=feed_dict)
 
         # update the target networks
         self._update_target_net()
         self.update_step += 1
         if self.buffer_type == 'proportional':
             self.buffer.update_priorities(priority, saved_mem_idxs)
-    

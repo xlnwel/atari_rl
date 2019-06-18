@@ -7,14 +7,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from run.grid_search import GridSearch
 from utility.yaml_op import load_args
 from utility.debug_tools import assert_colorize
-from run.single_train import main
 
 
 def parse_cmd_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--algorithm', '-a',
                         type=str,
-                        choices=['double', 'dule', 'iqn'],
+                        choices=['double', 'duel', 'iqn', 'rainbow-iqn', 
+                                'apex-double', 'apex-duel', 'apex-iqn', 'apex-rainbow-iqn'],
                         default=None)
     parser.add_argument('--environment', '-e',
                         type=str,
@@ -38,10 +38,28 @@ def parse_cmd_args():
 
     return args
 
+def import_main(algorithm):
+    if 'apex' in algorithm:
+        from run.distributed_train import main
+    else:
+        from run.single_train import main
+
+    return main
+    
+def get_arg_file(algorithm):
+    if 'apex' in algorithm:
+        arg_file = 'algo/apex/args.yaml'
+    else:
+        arg_file = 'algo/rainbow_iqn/args.yaml'
+
+    return arg_file
+
 if __name__ == '__main__':
     cmd_args = parse_cmd_args()
-    
-    arg_file = 'algo/rainbow_iqn/args.yaml'
+    algorithm = cmd_args.algorithm
+
+    main = import_main(algorithm)
+    arg_file = get_arg_file(algorithm)
 
     render = True if cmd_args.render == 'true' else False
 
@@ -63,8 +81,8 @@ if __name__ == '__main__':
         # we here continue to go with grid search since it is easier to deal with architecture search
         gs = GridSearch(arg_file, main, render=render, n_trials=cmd_args.trials, dir_prefix=prefix)
 
-        if cmd_args.algorithm:
-            gs.agent_args['algorithm'] = cmd_args.algorithm
+        if algorithm:
+            gs.agent_args['algorithm'] = algorithm
         if cmd_args.environment:
             gs.env_args['name'] = cmd_args.environment
         # Grid search happens here

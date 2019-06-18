@@ -26,6 +26,10 @@ def get_worker(BaseClass, *args, **kwargs):
                     log_stats=False,
                     device=None):
             self.no = worker_no
+            buffer_args['type'] = 'local'
+            args['batch_size'] = 1
+            self.max_episodes = max_episodes
+            self.random_eps = float(buffer_args['min_size']) / args['n_workers'] // 1000
 
             super().__init__(name, 
                             args, 
@@ -38,7 +42,6 @@ def get_worker(BaseClass, *args, **kwargs):
                             log_stats=log_stats,
                             device=device)
 
-            self.max_episodes = max_episodes
             pwc('Worker {} has been constructed.'.format(self.no), 'cyan')
 
         def sample_data(self, learner):
@@ -46,43 +49,43 @@ def get_worker(BaseClass, *args, **kwargs):
             score_deque = deque(maxlen=100)
             eps_len_deque = deque(maxlen=100)
             episode_i = 0
+            t = 0
             
             while True:
                 obs = self.env.reset()
 
-                for _ in range(self.max_path_length):
-                    action = self.act(obs)
+                while True:
+                    t += 1
+                    random_act = episode_i < self.random_eps
+                    action, q = self.act(obs, random_act=random_act, return_q=True)
                     next_obs, reward, done, _ = self.env.step(action)
                     
-                    self.buffer.add(obs, action, reward, next_obs, done)
-
-                    if self.buffer.is_full:
-                        priority = self.sess.run(self.priority)
-                        self.buffer['priority'] = priority
-
-                        learner.merge_buffer.remote(dict(self.buffer), self.buffer.capacity)
-                        self.buffer.reset()
+                    self.buffer.add(obs, action, reward, done, q)
 
                     obs = next_obs
 
                     if done:
                         break
 
+                self.buffer['priority'] = self.buffer.compute_priority(self.gamma, self.prio_epsilon, self.prio_alpha)
+                
+                learner.merge_buffer.remote(dict(self.buffer), self.buffer.idx)
+                self.buffer.reset()
+
                 score = self.env.get_score()
                 eps_len = self.env.get_length()
                 episode_i += 1
                 score_deque.append(score)
                 eps_len_deque.append(eps_len)
-                stats = dict(score=score, avg_score=np.mean(score_deque), 
+                stats = dict(t=t, score=score, avg_score=np.mean(score_deque), 
                             eps_len=eps_len, avg_eps_len=np.mean(eps_len_deque), 
                             worker_no=self.no)
                             
                 learner.record_stats.remote(stats)
                 
                 # pull weights from learner
-                if episode_i >= self.max_episodes:
+                if episode_i % self.max_episodes == 0:
                     weights = ray.get(learner.get_weights.remote())
                     self.variables.set_flat(weights)
-                    episode_i = 0
 
     return Worker.remote(*args, **kwargs)

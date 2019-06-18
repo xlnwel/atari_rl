@@ -23,7 +23,6 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
     best_score = -float('inf')
     el = 0
     t = 0
-    buffer_type = agent.buffer_type
     itrtimes = deque(maxlen=1000)
     
     obs = agent.env.reset()
@@ -33,23 +32,18 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
 
         start = time.time()
 
-        if buffer_type == 'uniform':
-            idx = agent.buffer.store_frame(obs)
         if render:
             agent.env.render()
         if agent.Qnets.use_noisy:
-            action = agent.act(obs) if agent.buffer.good_to_learn else agent.env.random_action()
+            random_act = not agent.buffer.good_to_learn
+            action = agent.act(obs, random_act=random_act)
         else:
-            action = (agent.act(obs) 
-                    if agent.buffer.good_to_learn and np.random.sample() > exploration_schedule.value(t) 
-                    else agent.env.random_action())
+            random_act = not agent.buffer.good_to_learn or np.random.sample() < exploration_schedule.value(t) 
+            action = agent.act(obs, random_act=random_act) 
 
         next_obs, reward, done, _ = agent.env.step(action)
         
-        if buffer_type == 'uniform':
-            agent.buffer.store_effect(idx, action, reward, done)
-        else:
-            agent.add_data(obs, action, reward, done)
+        agent.add_data(obs, action, reward, done)
         
         if not background_learning and agent.buffer.good_to_learn:
             agent.learn(t, lr_schedule.value(t))

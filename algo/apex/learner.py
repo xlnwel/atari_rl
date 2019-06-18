@@ -5,7 +5,7 @@ import tensorflow as tf
 import ray
 
 from utility import tf_utils
-
+from utility.utils import pwc
 
 def get_learner(BaseClass, *args, **kwargs):
 
@@ -38,7 +38,7 @@ def get_learner(BaseClass, *args, **kwargs):
             self.learning_thread = threading.Thread(target=self.background_learning, daemon=True)
             self.learning_thread.start()
             
-            print('Learner has been constructed.')
+            pwc('Learner has been constructed.', color='green')
             
         def get_weights(self):
             weights = self.variables.get_flat()
@@ -47,6 +47,7 @@ def get_learner(BaseClass, *args, **kwargs):
 
         def merge_buffer(self, local_buffer, length):
             self.buffer.merge(local_buffer, length)
+            pwc(f'Buffer merged: {len(self.buffer)}')
 
         def record_stats(self, kwargs):
             assert isinstance(kwargs, dict)

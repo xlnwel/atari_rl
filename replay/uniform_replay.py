@@ -12,8 +12,8 @@ class UniformReplay(Replay):
         super().__init__(args, obs_space)
 
     @override(Replay)
-    def add(self, obs, action, reward,  next_obs, done):
-        super()._add(obs, action, reward, next_obs, done)
+    def add(self, obs, action, reward, done):
+        super()._add(obs, action, reward, done)
 
     """ Implementation """
     @override(Replay)
