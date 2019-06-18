@@ -290,7 +290,9 @@ class Agent(Model):
             Q_dist_target = tf.reduce_sum(weight * self.Qnets.Q_dist_next_target, axis=2)   # [B, 51]
             Q_dist_original = tf.squeeze(self.Qnets.Q_dist, axis=1)                         # [B, 51]
 
-            kl_loss = - tf.reduce_sum(Q_dist_original * tf.log(Q_dist_target), axis=1)      # [B]
+            # adding 1e-8 to avoid NaN value caused by cross entropy
+            # https://stackoverflow.com/a/48355568/7850499
+            kl_loss = - tf.reduce_sum(Q_dist_original * tf.log(Q_dist_target + 1e-8), axis=1)
             loss = tf.reduce_mean(kl_loss)
 
         _, priority = self._compute_priority(self.data['reward'], self.data['done'],

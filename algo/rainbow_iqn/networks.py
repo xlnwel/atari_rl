@@ -98,7 +98,7 @@ class Networks(Module):
             Qs_dist, Qs = net_fn(self.obs, 'main')
             _, Qs_next = net_fn(self.next_obs, 'main', reuse=True)
             Qs_dist_next_target, Qs_next_target = net_fn(self.next_obs, 'target')
-        
+
             self.best_action = select_action(Qs, 'best_action')
             next_action = select_action(Qs_next, 'next_action')
 
