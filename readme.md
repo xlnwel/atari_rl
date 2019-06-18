@@ -2,7 +2,12 @@ In this project, we implement Rainbow and replace c51 in Rainbow with IQN.
 
 ## Algorithm Implemented
 
-- [x] Rainbow   (except c51)
+- [x] Rainbow
+- [x] PER
+- [x] Noisy Nets
+- [x] Double
+- [x] c51
+- [x] Dueling nets
 - [x] IQN
 
 ## Overall Architecture

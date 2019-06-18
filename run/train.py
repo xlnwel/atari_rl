@@ -13,9 +13,9 @@ def parse_cmd_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--algorithm', '-a',
                         type=str,
-                        choices=['double', 'duel', 'iqn', 'rainbow-iqn', 
-                                'apex-double', 'apex-duel', 'apex-iqn', 'apex-rainbow-iqn'],
-                        default=None)
+                        choices=['double', 'duel', 'iqn', 'c51', 'rainbow', 'rainbow-iqn', 
+                                'apex-double', 'apex-duel', 'apex-iqn', 'apex-c51', 'apex-rainbow', 'apex-rainbow-iqn'],
+                        default='')
     parser.add_argument('--environment', '-e',
                         type=str,
                         default=None)

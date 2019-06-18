@@ -237,6 +237,8 @@ class Agent(Model):
     def _loss(self):
         if self.algo == 'iqn':
             return self._iqn_loss()
+        elif self.algo == 'c51' or self.algo == 'rainbow':
+            return self._c51_loss()
         else:
             return self._q_loss()
 
@@ -263,11 +265,8 @@ class Agent(Model):
 
             return loss
 
-        with tf.name_scope('priority'):
-            Q_target = n_step_target(self.data['reward'], self.data['done'],
+        _, priority = self._compute_priority(self.data['reward'], self.data['done'],
                                     self.Qnets.Q_next_target, self.gamma, self.data['steps'])
-            Q_error = tf.abs(self.Qnets.Q - Q_target)
-            priority = self._compute_priority(Q_error)
 
         with tf.name_scope('loss'):
             quantile_values_target = tiled_n_step_target()
@@ -279,14 +278,31 @@ class Agent(Model):
 
         return priority, loss
 
-    def _q_loss(self):
+    def _c51_loss(self):
         with tf.name_scope('loss'):
-            Q_target = n_step_target(self.data['reward'], self.data['done'],
-                                    self.Qnets.Q_next_target, self.gamma, self.data['steps'])
-            Q_error = tf.abs(self.Qnets.Q - Q_target)
-            
-            priority = self._compute_priority(Q_error)
+            # Eq.7 in paper
+            z_target = n_step_target(self.data['reward'], self.data['done'], 
+                                    self.Qnets.z_support, self.gamma, self.data['steps'])   # [B, 51]
+            z_target = tf.expand_dims(tf.clip_by_value(z_target, -10, 10), axis=1)          # [B, 1, 51]
+            z_original = tf.expand_dims(self.Qnets.z_support[None], axis=2)                 # [B, 51, 1]
 
+            weight = tf.clip_by_value(1.-(tf.abs(z_target) - z_original) / self.Qnets.delta_z, 0, 1) # [B, 51, 51]
+            Q_dist_target = tf.reduce_sum(weight * self.Qnets.Q_dist_next_target, axis=2)   # [B, 51]
+            Q_dist_original = tf.squeeze(self.Qnets.Q_dist, axis=1)                         # [B, 51]
+
+            kl_loss = - tf.reduce_sum(Q_dist_original * tf.log(Q_dist_target), axis=1)      # [B]
+            loss = tf.reduce_mean(kl_loss)
+
+        _, priority = self._compute_priority(self.data['reward'], self.data['done'],
+                                    self.Qnets.Q_next_target, self.gamma, self.data['steps'])
+
+        return priority, loss
+        
+    def _q_loss(self):
+        Q_error, priority = self._compute_priority(self.data['reward'], self.data['done'],
+                                    self.Qnets.Q_next_target, self.gamma, self.data['steps'])
+
+        with tf.name_scope('loss'):
             loss_func = huber_loss if self.critic_loss_type == 'huber' else tf.square
             if self.buffer_type == 'proportional':
                 loss = tf.reduce_mean(self.data['IS_ratio'] * loss_func(Q_error), name='loss')
@@ -295,12 +311,15 @@ class Agent(Model):
 
         return priority, loss
 
-    def _compute_priority(self, priority):
+    def _compute_priority(self, reward, done, Q_next_target, gamma, steps):
         with tf.name_scope('priority'):
+            Q_target = n_step_target(reward, done, Q_next_target, gamma, steps)
+            Q_error = self.Qnets.Q - Q_target
+            priority = tf.abs(Q_error)
             priority += self.prio_epsilon
             priority **= self.prio_alpha
         
-        return priority
+        return Q_error, priority
 
     def _target_net_ops(self):
         with tf.name_scope('target_net_op'):
