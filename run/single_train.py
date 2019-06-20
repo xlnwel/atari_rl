@@ -12,8 +12,8 @@ from utility.schedule import PiecewiseSchedule
 from algo.rainbow_iqn.agent import Agent
 
 
-def train(agent, render, log_steps, print_terminal_info=True, background_learning=True):
-    n_iterations = 2e8 / 4.
+def train(agent, render, log_steps, max_steps=2e8, print_terminal_info=True, background_learning=True):
+    n_iterations = max_steps / 4.
     exploration_schedule = PiecewiseSchedule([(0, 1.0), (1e6, 0.1), (n_iterations / 2, 0.01)], 
                                             outside_value=0.01)
     lr_schedule = PiecewiseSchedule([(0, 1e-4), (n_iterations / 10, 1e-4), (n_iterations / 2,  5e-5)],
@@ -26,7 +26,7 @@ def train(agent, render, log_steps, print_terminal_info=True, background_learnin
     itrtimes = deque(maxlen=1000)
     
     obs = agent.env.reset()
-    while agent.env.get_total_steps() < 2e8:
+    while agent.env.get_total_steps() < max_steps:
         t += 1
         el += 1
 
@@ -92,13 +92,17 @@ def main(env_args, agent_args, buffer_args, render=False):
     agent_args['env_stats']['times'] = 1
     agent = Agent('Agent', agent_args, env_args, buffer_args, 
                 log_tensorboard=True, log_stats=True, log_params=False, device='/GPU:0')
+    max_steps = 2e8
     if agent_args['background_learning']:
         utils.pwc('Background Learning...')
-        lt = threading.Thread(target=agent.background_learning, daemon=True)
+        n_iterations = max_steps / 4.
+        lr_schedule = PiecewiseSchedule([(0, 1e-4), (n_iterations / 10, 1e-4), (n_iterations / 2,  5e-5)],
+                                    outside_value=5e-5)
+        lt = threading.Thread(target=agent.background_learning, args=(lr_schedule,), daemon=True)
         lt.start()
     else:
         utils.pwc('Foreground Learning...')
     model = agent_args['model_name']
     utils.pwc(f'Model {model} starts training')
     
-    train(agent, render, log_steps=int(1e4), background_learning=agent_args['background_learning'])
+    train(agent, render, log_steps=int(1e4), max_steps=max_steps, background_learning=agent_args['background_learning'])

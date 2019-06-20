@@ -3,7 +3,8 @@ n_experiments: 0 # 1 run the following configuration, otherwise, run test code i
 env:
     atari: &atari True
     video_path: video
-    name: BreakoutNoFrameskip-v4    # PongNoFrameskip-v4, MontezumaRevengeNoFrameskip-v0
+    name: PongNoFrameskip-v4    # PongNoFrameskip-v4, MontezumaRevengeNoFrameskip-v0, BreakoutNoFrameskip-v4
+    max_episode_steps: 108000
     seed: 0
 agent:
     background_learning: False
@@ -22,18 +23,18 @@ agent:
     update_freq: 4
     n_steps: 3
     loss_type: huber   # huber or mse
-    target_update_freq: 10000
+    target_update_freq: 8000  # we count update step, which is 4 times frame steps
     
     Qnets:
         noisy: True         # use noisy net or scheduled epsilon-greedy
         noisy_sigma: 0.5    # standard deviation for noisy layers
-        N: 8                # N in paper, num of quantiles for online quantile network
-        N_prime: 8          # N' in paper, num of quantiles for target quantile network
-        K: 32               # K in paper, num of quantiles for action selection
-        delta: 1            # kappa in paper, used in huber loss
-        quantile_embedding_dim: 64
         # args for optimizer
-        schedule_lr: True
+        v_min: -10
+        v_max: 10
+        n_atoms: 51
+        schedule_lr: False
+        learning_rate: 6.25e-5
+        epsilon: 1.5e-4
         clip_norm: 10
     env_stats:
         times: 1
@@ -48,7 +49,7 @@ buffer:
     beta0: 0.4
     epsilon: 1e-4
     beta_steps: 1e6
-    min_size: 5e4
+    min_size: 8e4
     capacity: 1e6
 
     tb_capacity: 100

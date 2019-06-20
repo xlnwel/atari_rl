@@ -1,4 +1,5 @@
 import time
+from collections import deque
 import numpy as np
 import tensorflow as tf
 from ray.experimental.tf_utils import TensorFlowVariables
@@ -79,6 +80,8 @@ class Agent(Model):
         return self.env.max_episode_steps
     
     def learn(self, t, lr):
+        if not self.Qnets.args['schedule_lr']:
+            lr = None
         # update only update_freq steps
         if t % self.update_freq == 0:
             self._learn(lr)
@@ -107,22 +110,24 @@ class Agent(Model):
     def add_data(self, obs, action, reward, done):
         self.buffer.add(obs, action, reward, done)
 
-    def background_learning(self):
+    def background_learning(self, lr_schedule=None):
         from utility.debug_tools import timeit
         while not self.buffer.good_to_learn:
             time.sleep(1)
-        print('Start Learning...')
+        pwc('Start Learning...', 'green')
 
         t = 0
-        lt = []
+        lt = deque(maxlen=1000)
         while True:
             t += 1
-            duration, _ = timeit(self._learn)
+            if lr_schedule:
+                duration, _ = timeit(self._learn, args=(lr_schedule.value(t),))
+            else:
+                duration, _ = timeit(self._learn)
             lt.append(duration)
-            if t % 1000 == 0:
-                print(f'{self.model_name}:\tTakes {np.sum(lt):3.2f}s to learn 1000 times')
+            if t % (self.update_freq * 1000) == 0:
+                pwc(f'{self.model_name}:\tTakes {np.sum(lt):3.2f}s to learn 1000 times', 'green')
                 t = 0
-                lt = []
 
     """ Implementation """
     def _build_graph(self):
@@ -261,7 +266,7 @@ class Agent(Model):
             huber = huber_loss(u, delta=self.args['Qnets']['delta'])
             
             qr_loss = tf.reduce_sum(tf.reduce_mean(abs_part * huber, axis=2), axis=1)   # [B]
-            loss = tf.reduce_mean(qr_loss)
+            loss = tf.reduce_mean(self.data['IS_ratio'] * qr_loss)
 
             return loss
 
@@ -282,21 +287,19 @@ class Agent(Model):
         with tf.name_scope('loss'):
             # Eq.7 in paper
             z_target = n_step_target(self.data['reward'], self.data['done'], 
-                                    self.Qnets.z_support, self.gamma, self.data['steps'])   # [B, 51]
-            z_target = tf.expand_dims(tf.clip_by_value(z_target, -10, 10), axis=1)          # [B, 1, 51]
-            z_original = tf.expand_dims(self.Qnets.z_support[None], axis=2)                 # [B, 51, 1]
+                                    self.Qnets.z_support, self.gamma, self.data['steps'])           # [B, 51]
+            z_target = tf.clip_by_value(z_target, self.Qnets.v_min, self.Qnets.v_max)[:, None, :]   # [B, 1, 51]
+            z_original = self.Qnets.z_support[None, :, None]                                        # [1, 51, 1]
 
-            weight = tf.clip_by_value(1.-(tf.abs(z_target) - z_original) / self.Qnets.delta_z, 0, 1) # [B, 51, 51]
-            Q_dist_target = tf.reduce_sum(weight * self.Qnets.Q_dist_next_target, axis=2)   # [B, 51]
-            Q_dist_original = tf.squeeze(self.Qnets.Q_dist, axis=1)                         # [B, 51]
+            weight = tf.clip_by_value(1.-tf.abs(z_target - z_original) / self.Qnets.delta_z, 0, 1)  # [B, 51, 51]
+            dist_target = tf.reduce_sum(weight * self.Qnets.dist_next_target, axis=2)               # [B, 51]
+            dist_target = tf.stop_gradient(dist_target)
 
-            # adding 1e-8 to avoid NaN value caused by cross entropy
-            # https://stackoverflow.com/a/48355568/7850499
-            kl_loss = - tf.reduce_sum(Q_dist_original * tf.log(Q_dist_target + 1e-8), axis=1)
+            kl_loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=dist_target, logits=self.Qnets.logits)
             loss = tf.reduce_mean(kl_loss)
 
-        _, priority = self._compute_priority(self.data['reward'], self.data['done'],
-                                    self.Qnets.Q_next_target, self.gamma, self.data['steps'])
+        with tf.name_scope('priority'):
+            priority = self._rescale(kl_loss)
 
         return priority, loss
         
@@ -307,7 +310,7 @@ class Agent(Model):
         with tf.name_scope('loss'):
             loss_func = huber_loss if self.critic_loss_type == 'huber' else tf.square
             if self.buffer_type == 'proportional':
-                loss = tf.reduce_mean(self.data['IS_ratio'] * loss_func(Q_error), name='loss')
+                loss = tf.reduce_mean(self.data['IS_ratio'][:, None] * loss_func(Q_error), name='loss')
             else:
                 loss = tf.reduce_mean(loss_func(Q_error), name='loss')
 
@@ -318,10 +321,15 @@ class Agent(Model):
             Q_target = n_step_target(reward, done, Q_next_target, gamma, steps)
             Q_error = self.Qnets.Q - Q_target
             priority = tf.abs(Q_error)
-            priority += self.prio_epsilon
-            priority **= self.prio_alpha
+            priority = self._rescale(priority)
         
         return Q_error, priority
+
+    def _rescale(self, priority):
+        priority = tf.squeeze(priority)
+        priority = (priority + self.prio_epsilon)**self.prio_alpha
+        
+        return priority
 
     def _target_net_ops(self):
         with tf.name_scope('target_net_op'):
@@ -350,30 +358,46 @@ class Agent(Model):
     def _learn(self, lr=None):
         if lr:
             feed_dict = {self.learning_rate: lr}
-        else:
-            feed_dict = {}
+            if self.log_tensorboard:
+                if self.buffer_type == 'proportional':
+                    priority, saved_mem_idxs, _, summary = self.sess.run([self.priority, 
+                                                                        self.data['saved_mem_idxs'], 
+                                                                        self.opt_op, 
+                                                                        self.graph_summary], 
+                                                                        feed_dict=feed_dict)
+                else:
+                    _, summary = self.sess.run([self.opt_op, self.graph_summary], feed_dict=feed_dict)
 
-        if self.log_tensorboard:
-            if self.buffer_type == 'proportional':
-                priority, saved_mem_idxs, _, summary = self.sess.run([self.priority, 
-                                                                    self.data['saved_mem_idxs'], 
-                                                                    self.opt_op, 
-                                                                    self.graph_summary], 
-                                                                    feed_dict=feed_dict)
+                if self.update_step % 100 == 0:
+                    self.writer.add_summary(summary, self.update_step)
+                    self.save()
             else:
-                _, summary = self.sess.run([self.opt_op, self.graph_summary], feed_dict=feed_dict)
-
-            if self.update_step % 100 == 0:
-                self.writer.add_summary(summary, self.update_step)
-                self.save()
+                if self.buffer_type == 'proportional':
+                    priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
+                                                                self.data['saved_mem_idxs'], 
+                                                                self.opt_op], feed_dict=feed_dict)
+                else:
+                    _ = self.sess.run([self.opt_op], feed_dict=feed_dict)
         else:
-            if self.buffer_type == 'proportional':
-                priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
-                                                            self.data['saved_mem_idxs'], 
-                                                            self.opt_op], feed_dict=feed_dict)
-            else:
-                _ = self.sess.run([self.opt_op], feed_dict=feed_dict)
+            if self.log_tensorboard:
+                if self.buffer_type == 'proportional':
+                    priority, saved_mem_idxs, _, summary = self.sess.run([self.priority, 
+                                                                        self.data['saved_mem_idxs'], 
+                                                                        self.opt_op, 
+                                                                        self.graph_summary])
+                else:
+                    _, summary = self.sess.run([self.opt_op, self.graph_summary])
 
+                if self.update_step % 100 == 0:
+                    self.writer.add_summary(summary, self.update_step)
+                    self.save()
+            else:
+                if self.buffer_type == 'proportional':
+                    priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
+                                                                self.data['saved_mem_idxs'], 
+                                                                self.opt_op])
+                else:
+                    _ = self.sess.run([self.opt_op])
         # update the target networks
         self._update_target_net()
         self.update_step += 1

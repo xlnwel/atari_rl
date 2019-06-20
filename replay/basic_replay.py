@@ -141,7 +141,7 @@ class Replay:
         next_obs = np.stack([encode_obs(idx, self.memory['obs'], self.memory['done'],
                               self.frame_history_len, self.is_full, self.capacity) for idx in next_indexes])
         # use zero obs as terminal obs
-        next_obs = np.where(np.expand_dims(np.expand_dims(self.memory['done'][indexes], axis=2), axis=3), 
+        next_obs = np.where(self.memory['done'][indexes][..., None, None], 
                             np.zeros_like(obs), next_obs)
 
         return (

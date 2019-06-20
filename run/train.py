@@ -16,6 +16,10 @@ def parse_cmd_args():
                         choices=['double', 'duel', 'iqn', 'c51', 'rainbow', 'rainbow-iqn', 
                                 'apex-double', 'apex-duel', 'apex-iqn', 'apex-c51', 'apex-rainbow', 'apex-rainbow-iqn'],
                         default='')
+    parser.add_argument('--background', '-b',
+                        type=str,
+                        choices=['true', 'false', ''],
+                        default='')
     parser.add_argument('--environment', '-e',
                         type=str,
                         default=None)
@@ -49,6 +53,8 @@ def import_main(algorithm):
 def get_arg_file(algorithm):
     if 'apex' in algorithm:
         arg_file = 'algo/apex/args.yaml'
+    elif algorithm == 'rainbow' or algorithm == 'c51':
+        arg_file = 'algo/rainbow_iqn/c51_args.yaml'
     else:
         arg_file = 'algo/rainbow_iqn/args.yaml'
 
@@ -62,6 +68,8 @@ if __name__ == '__main__':
     arg_file = get_arg_file(algorithm)
 
     render = True if cmd_args.render == 'true' else False
+    if cmd_args.background != '':
+        background_learning = True if cmd_args.background == 'true' else False
 
     if cmd_args.file != '':
         args = load_args(arg_file)
@@ -74,12 +82,16 @@ if __name__ == '__main__':
         agent_args['log_root_dir'], _ = os.path.split(agent_args['model_root_dir'])
         agent_args['log_root_dir'] += '/logs'
 
+        if cmd_args.background != '':
+            agent_args['background_learning'] = background_learning
         main(env_args, agent_args, buffer_args, render=render)
     else:
         prefix = cmd_args.prefix
         # Although random parameter search is in general better than grid search, 
         # we here continue to go with grid search since it is easier to deal with architecture search
         gs = GridSearch(arg_file, main, render=render, n_trials=cmd_args.trials, dir_prefix=prefix)
+        if cmd_args.background != '':
+            gs.agent_args['background_learning'] = background_learning
 
         if algorithm:
             gs.agent_args['algorithm'] = algorithm

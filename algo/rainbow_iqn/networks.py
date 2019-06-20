@@ -31,11 +31,11 @@ class Networks(Module):
             self.K = args['K']                          # K in paper, num of quantiles for action selection
             self.delta = args['delta']                  # kappa in paper, used in huber loss
         elif algo == 'c51' or algo == 'rainbow':
-            self.n_atoms = 51
-            self.v_min = -10
-            self.v_max = 10
+            self.n_atoms = args['n_atoms']
+            self.v_min = float(args['v_min'])
+            self.v_max = float(args['v_max'])
             self.delta_z = (self.v_max - self.v_min) / (self.n_atoms - 1)
-            self.z_support = np.linspace(self.v_min, self.v_max, self.n_atoms, dtype=np.float32)
+            self.z_support = tf.linspace(self.v_min, self.v_max, self.n_atoms)
 
         super().__init__(name, 
                          args, 
@@ -95,16 +95,17 @@ class Networks(Module):
         elif algo == 'c51' or algo == 'rainbow':
             net_fn = lambda obs, name, reuse=False: self._c51_net(obs, self.n_actions, name=name, reuse=reuse)
             # [B, A, 51], [B, A]
-            Qs_dist, Qs = net_fn(self.obs, 'main')
-            _, Qs_next = net_fn(self.next_obs, 'main', reuse=True)
-            Qs_dist_next_target, Qs_next_target = net_fn(self.next_obs, 'target')
+            logits, _, Qs = net_fn(self.obs, 'main')
+            _, _, Qs_next = net_fn(self.next_obs, 'main', reuse=True)
+            _, dist_next_target, _ = net_fn(self.next_obs, 'target')
 
             self.best_action = select_action(Qs, 'best_action')
             next_action = select_action(Qs_next, 'next_action')
 
-            # [B, 1, 51], [B, 1]
-            self.Q_dist, self.Q = self._c51_values(self.action, Qs_dist, Qs)
-            self.Q_dist_next_target, self.Q_next_target = self._c51_values(next_action, Qs_dist_next_target, Qs_next_target)
+            # [B, 1, 51], [B, 1, 51]
+            self.logits = self._c51_action_value(self.action, logits, 'logits')
+            self.dist_next_target = self._c51_action_value(next_action, dist_next_target, 'dist_next_target')
+            self.Q = Qs     # for tensorflow bookkeeping
 
         elif algo == 'duel' or algo == 'double':
             if algo == 'duel': 
@@ -181,7 +182,7 @@ class Networks(Module):
     def _f_net(self, x, out_dim, n_quantiles, batch_size, name=None):
         name = f'{name}_f_net' if name else 'f_net'
         with tf.variable_scope(name):
-            quantile_values = self._fc_net(x, out_dim)
+            quantile_values = self._head_net(x, out_dim)
             quantile_values = tf.reshape(quantile_values, (n_quantiles, batch_size, out_dim))
             q = tf.reduce_mean(quantile_values, axis=0)
 
@@ -203,41 +204,39 @@ class Networks(Module):
         with tf.variable_scope(name, reuse=reuse):
             x = self._conv_net(x, 'conv_net')
             if self.args['algo'] == 'rainbow':
-                v_dist, v = self._c51_fc_net(x, 1, 'value_dist_net')
-                a_dist, a = self._c51_fc_net(x, out_dim, 'adv_dist_net')
+                v_logits = self._c51_head(x, 1, 'value_net')
+                a_logits = self._c51_head(x, out_dim, 'adv_net')
 
-                with tf.name_scope('q'):
-                    q_dist = v_dist + a_dist - tf.reduce_mean(a_dist, axis=1, keepdims=True)
-                    q = v + a - tf.reduce_mean(a, axis=1, keepdims=True)
+                with tf.name_scope('q_logits'):
+                    q_logits = v_logits + a_logits - tf.reduce_mean(a_logits, axis=1, keepdims=True)
             else:
-                q_dist, q = self._c51_fc_net(x, out_dim, 'q_dist_net')
+                q_logits = self._c51_head(x, out_dim, 'q_net')
+            with tf.name_scope('q'):
+                q_dist = tf.nn.softmax(q_logits)                        # [B, A, 51]
+                q = tf.reduce_sum(self.z_support * q_dist, axis=2)      # [B, A]
             
-        return q_dist, q
+        return q_logits, q_dist, q
 
-    def _c51_fc_net(self, x, out_dim, name):
+    def _c51_head(self, x, out_dim, name):
         with tf.variable_scope(name):
-            x = self._fc_net(x, out_dim*self.n_atoms)
-            y_logits = tf.reshape(x, (-1, out_dim, self.n_atoms))   # [B, A, 51]
-            y_dist = tf.nn.softmax(y_logits, axis=2)
-            y = tf.reduce_sum(self.z_support * y_dist, axis=2)
+            x = self._head_net(x, out_dim*self.n_atoms)
+            logits = tf.reshape(x, (-1, out_dim, self.n_atoms))         # [B, A, 51]
 
-        return y_dist, y
+        return logits
 
-    def _c51_values(self, action, Qs_dist, Qs):
-        with tf.name_scope('action_values'):
-            action = tf.one_hot(action, self.n_actions)
-            action_ext = tf.expand_dims(action, axis=2)
-            q_dist = tf.reduce_sum(action_ext * Qs_dist, axis=1, keepdims=True)
-            q = tf.reduce_sum(action * Qs, axis=1, keepdims=True)
+    def _c51_action_value(self, action, values, name):
+        with tf.name_scope(name):
+            action = tf.one_hot(action, self.n_actions)[..., None]
+            value = tf.reduce_sum(action * values, axis=1, keepdims=True)
 
-        return q_dist, q
+        return value
 
     """ Dueling Nets """
     def _duel_net(self, x, out_dim, name, reuse=None):
         with tf.variable_scope(name, reuse=reuse):
             x = self._conv_net(x, 'conv_net')
-            v = self._fc_net(x, 1, 'value_net')
-            a = self._fc_net(x, out_dim, 'adv_net')
+            v = self._head_net(x, 1, 'value_net')
+            a = self._head_net(x, out_dim, 'adv_net')
 
             with tf.name_scope('q'):
                 q = v + a - tf.reduce_mean(a, axis=1, keepdims=True)
@@ -248,7 +247,7 @@ class Networks(Module):
     def _q_net(self, x, out_dim, name, reuse=None):
         with tf.variable_scope(name, reuse=reuse):
             x = self._conv_net(x, 'conv_net')
-            q = self._fc_net(x, out_dim, 'action_net')
+            q = self._head_net(x, out_dim, 'action_net')
 
         return q
 
@@ -268,7 +267,7 @@ class Networks(Module):
 
         return x
 
-    def _fc_net(self, x, out_dim, name=None):
+    def _head_net(self, x, out_dim, name=None):
         def net(x, out_dim):
             layer = self.noisy if self.use_noisy else tf.layers.dense
             name_fn = lambda i: f'noisy_{i}' if self.use_noisy else f'dense_{i}'
