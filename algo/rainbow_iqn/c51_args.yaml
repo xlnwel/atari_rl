@@ -33,7 +33,7 @@ agent:
         v_max: 10
         n_atoms: 51
         schedule_lr: False
-        learning_rate: 6.25e-5
+        learning_rate: 2.5e-4
         epsilon: 1.5e-4
         clip_norm: 10
     env_stats:

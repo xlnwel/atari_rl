@@ -18,9 +18,9 @@ def get_learner(BaseClass, *args, **kwargs):
                     env_args,
                     buffer_args,
                     sess_config=None, 
-                    save=True, 
+                    save=False, 
                     log_tensorboard=True, 
-                    log_params=True,
+                    log_params=False,
                     log_stats=True,
                     device=None):
                     
@@ -47,7 +47,6 @@ def get_learner(BaseClass, *args, **kwargs):
 
         def merge_buffer(self, local_buffer, length):
             self.buffer.merge(local_buffer, length)
-            pwc(f'Buffer merged: {len(self.buffer)}')
 
         def record_stats(self, kwargs):
             assert isinstance(kwargs, dict)

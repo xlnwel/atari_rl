@@ -45,6 +45,7 @@ export TF_CPP_MIN_LOG_LEVEL=3
 # For MKL and detailed reasoning, refer to [this instruction](https://ray.readthedocs.io/en/latest/example-rl-pong.html?highlight=openblas#the-distributed-version)
 export OPENBLAS_NUM_THREADS=1
 
+# By default, this line runs rainbow-iqn, which replaces c51 in rainbow with iqn
 # For full argument specification, please refer to run/train.py
 python run/train.py
 ```
@@ -56,9 +57,17 @@ All tests are done in [PongNoFrameskip-v4](https://gym.openai.com/envs/Pong-v0/)
     1. convolutional layers use same padding
     2. bias is neither used in convolutional layers nor fully connected layers
 
-2. Zero states are used as terminal states.
+2. Double Q nets, noisy layers, PER, multi-steps are used by default. 
 
-3. Best arguments are kept in `args.yaml`. Most arguments are from the reference paper, learning rate schedule is from homework3 of UCB [cs294-112](http://rail.eecs.berkeley.edu/deeprlcourse/).
+3. Zero states are used as terminal states.
+
+4. Best arguments are kept in `args.yaml`. Most arguments are from the reference paper, learning rate schedule is from homework3 of UCB [cs294-112](http://rail.eecs.berkeley.edu/deeprlcourse/).
+
+5. I modify the network a little bit, by adding a dense layer before dueling heads. This saves more than 2/3 parameters(10 million vs 36 million, which is mainly induced by the combination of dueling heads and noisy layers). Forthermore, it mitigates overfitting on some environments such as breakout.
+
+6. Background learning is initially designed for Ape-X, which I happened to find out works extremely well on (continuous environments](https://github.com/xlnwel/model-free-algorithms) that do not require a deep net. However, it does no work that well with Atari games. There are two potential reason I can conjecture:
+    1. Background learning increase the learning frequency, which makes it more likely overfit and get stuck at a local optimum. Methods such as regularization and disentanglement might help alleviate the issue.
+    2. I use a new thread to do background learning, which actually does not achieve parallelism because of Python's GIL. This actually slows down the interaction with environment, and exacerbate model overfitting. Multi-processing achieved in Ape-X alleviates this issue.
 
 ## Paper References
 

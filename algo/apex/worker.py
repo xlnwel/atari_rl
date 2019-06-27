@@ -54,7 +54,7 @@ def get_worker(BaseClass, *args, **kwargs):
             while True:
                 obs = self.env.reset()
 
-                while True:
+                while not self.buffer.full:
                     t += 1
                     random_act = episode_i < self.random_eps
                     action, q = self.act(obs, random_act=random_act, return_q=True)

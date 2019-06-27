@@ -15,7 +15,7 @@ def parse_cmd_args():
                         type=str,
                         choices=['double', 'duel', 'iqn', 'c51', 'rainbow', 'rainbow-iqn', 
                                 'apex-double', 'apex-duel', 'apex-iqn', 'apex-c51', 'apex-rainbow', 'apex-rainbow-iqn'],
-                        default='')
+                        default='rainbow-iqn')
     parser.add_argument('--background', '-b',
                         type=str,
                         choices=['true', 'false', ''],

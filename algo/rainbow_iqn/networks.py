@@ -94,7 +94,7 @@ class Networks(Module):
                                                                                     Qs_next_target)
         elif algo == 'c51' or algo == 'rainbow':
             net_fn = lambda obs, name, reuse=False: self._c51_net(obs, self.n_actions, name=name, reuse=reuse)
-            # [B, A, 51], [B, A]
+            # [B, A, N], [B, A]
             logits, _, Qs = net_fn(self.obs, 'main')
             _, _, Qs_next = net_fn(self.next_obs, 'main', reuse=True)
             _, dist_next_target, _ = net_fn(self.next_obs, 'target')
@@ -102,11 +102,10 @@ class Networks(Module):
             self.best_action = select_action(Qs, 'best_action')
             next_action = select_action(Qs_next, 'next_action')
 
-            # [B, 1, 51], [B, 1, 51]
+            # [B, 1, N], [B, 1, N]
             self.logits = self._c51_action_value(self.action, logits, 'logits')
             self.dist_next_target = self._c51_action_value(next_action, dist_next_target, 'dist_next_target')
             self.Q = Qs     # for tensorflow bookkeeping
-
         elif algo == 'duel' or algo == 'double':
             if algo == 'duel': 
                 net_fn = lambda obs, name, reuse=False: self._duel_net(obs, self.n_actions, name=name, reuse=reuse)
@@ -211,8 +210,9 @@ class Networks(Module):
                     q_logits = v_logits + a_logits - tf.reduce_mean(a_logits, axis=1, keepdims=True)
             else:
                 q_logits = self._c51_head(x, out_dim, 'q_net')
+
             with tf.name_scope('q'):
-                q_dist = tf.nn.softmax(q_logits)                        # [B, A, 51]
+                q_dist = tf.nn.softmax(q_logits)                        # [B, A, N]
                 q = tf.reduce_sum(self.z_support * q_dist, axis=2)      # [B, A]
             
         return q_logits, q_dist, q
@@ -220,7 +220,7 @@ class Networks(Module):
     def _c51_head(self, x, out_dim, name):
         with tf.variable_scope(name):
             x = self._head_net(x, out_dim*self.n_atoms)
-            logits = tf.reshape(x, (-1, out_dim, self.n_atoms))         # [B, A, 51]
+            logits = tf.reshape(x, (-1, out_dim, self.n_atoms))         # [B, A, N]
 
         return logits
 
@@ -257,6 +257,7 @@ class Networks(Module):
             x = tf.layers.conv2d(x, 64, 4, strides=2, padding='same', use_bias=False, activation=tf.nn.relu)
             x = tf.layers.conv2d(x, 64, 3, strides=1, padding='same', use_bias=False, activation=tf.nn.relu)
             x = tf.layers.flatten(x)
+            # x = tf.layers.dense(x, 512, use_bias=False)
 
             return x
         if name:

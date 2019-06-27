@@ -14,9 +14,10 @@ from algo.rainbow_iqn.agent import Agent
 
 def train(agent, render, log_steps, max_steps=2e8, print_terminal_info=True, background_learning=True):
     n_iterations = max_steps / 4.
+    lr = agent.args['Qnets']['learning_rate']
     exploration_schedule = PiecewiseSchedule([(0, 1.0), (1e6, 0.1), (n_iterations / 2, 0.01)], 
                                             outside_value=0.01)
-    lr_schedule = PiecewiseSchedule([(0, 1e-4), (n_iterations / 10, 1e-4), (n_iterations / 2,  5e-5)],
+    lr_schedule = PiecewiseSchedule([(0, lr), (n_iterations / 10, lr), (n_iterations / 2,  5e-5)],
                                     outside_value=5e-5)
 
     episode_lengths = deque(maxlen = 100)
@@ -95,8 +96,9 @@ def main(env_args, agent_args, buffer_args, render=False):
     max_steps = 2e8
     if agent_args['background_learning']:
         utils.pwc('Background Learning...')
+        lr = agent.args['Qnets']['learning_rate']
         n_iterations = max_steps / 4.
-        lr_schedule = PiecewiseSchedule([(0, 1e-4), (n_iterations / 10, 1e-4), (n_iterations / 2,  5e-5)],
+        lr_schedule = PiecewiseSchedule([(0, lr), (n_iterations / 10, lr), (n_iterations / 2,  5e-5)],
                                     outside_value=5e-5)
         lt = threading.Thread(target=agent.background_learning, args=(lr_schedule,), daemon=True)
         lt.start()

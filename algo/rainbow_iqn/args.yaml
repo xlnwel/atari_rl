@@ -3,7 +3,8 @@ n_experiments: 0 # 1 run the following configuration, otherwise, run test code i
 env:
     atari: &atari True
     video_path: video
-    name: BreakoutNoFrameskip-v4    # PongNoFrameskip-v4, MontezumaRevengeNoFrameskip-v0
+    name: BreakoutNoFrameskip-v4    # PongNoFrameskip-v4, BreakoutNoFrameskip-v4, MontezumaRevengeNoFrameskip-v0
+    max_episode_steps: 27000
     seed: 0
 agent:
     background_learning: False
@@ -34,6 +35,7 @@ agent:
         quantile_embedding_dim: 64
         # args for optimizer
         schedule_lr: True
+        learning_rate: 1.e-4
         clip_norm: 10
     env_stats:
         times: 1

@@ -3,14 +3,14 @@ n_experiments: 0 # 1 run the following configuration, otherwise, run test code i
 env:
     atari: &atari True
     video_path: video
-    name: PongNoFrameskip-v4
-    max_episode_steps: 3000
+    name: BreakoutNoFrameskip-v4
+    max_episode_steps: 27000
     seed: 0
 agent:
     background_learning: False
     gamma: &gamma 0.99
     algorithm: rainbow-iqn  # double, duel, iqn. or rainbow-iqn, this could be overwritten by the command argument algorithm
-    batch_size: 512
+    batch_size: 32
     prefetches: 5
     n_workers: &n_workers 10
 

@@ -11,10 +11,6 @@ class LocalBuffer(dict):
         self.n_steps = args['n_steps']
         self.gamma = args['gamma']
 
-        # The following two fake data members are only used to complete the data pipeline
-        # self.fake_ratio = np.zeros(self.valid_size)
-        # self.fake_ids = np.zeros(self.valid_size, dtype=np.int32)
-
         init_buffer(self, self.capacity, obs_space, True)
         self['q'] = np.zeros((self.capacity+self.n_steps, 1))
 
@@ -35,13 +31,17 @@ class LocalBuffer(dict):
 
         return obs
 
+    @property
+    def full(self):
+        return self.idx == self.capacity
+        
     def __call__(self):
         """ This function is actually not used, but is required since we use dataset instead of placeholders """
         while True:
             obs = encode_obs(0, self['obs'], self['done'], 4, False, self.capacity)[None]
             # we take obs as next_obs for simplicity, since this function will not be invoked in practice anyway
             yield (obs, self['action'][0, None], self['reward'][0, None],
-                                obs, self['done'][0, None], self['steps'][0, None])
+                    obs, self['done'][0, None], self['steps'][0, None])
 
     def reset(self):
         self.idx = 0
