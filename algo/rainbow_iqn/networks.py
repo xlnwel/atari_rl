@@ -257,7 +257,7 @@ class Networks(Module):
             x = tf.layers.conv2d(x, 64, 4, strides=2, padding='same', use_bias=False, activation=tf.nn.relu)
             x = tf.layers.conv2d(x, 64, 3, strides=1, padding='same', use_bias=False, activation=tf.nn.relu)
             x = tf.layers.flatten(x)
-            # x = tf.layers.dense(x, 512, use_bias=False)
+            x = tf.layers.dense(x, 512, use_bias=False)
 
             return x
         if name:
