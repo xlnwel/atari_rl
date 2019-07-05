@@ -31,7 +31,6 @@ class Agent(Model):
         # hyperparameters
         self.gamma = args['gamma'] if 'gamma' in args else .99
         self.update_freq = args['update_freq']
-        self.prefetches = args['prefetches'] if 'prefetches' in args else 0
         self.critic_loss_type = args['loss_type']
         self.target_update_freq = args['target_update_freq']
         self.update_step = 0
@@ -167,8 +166,7 @@ class Agent(Model):
                 (None, 1)
             )
             ds = tf.data.Dataset.from_generator(self.buffer, sample_types, sample_shapes)
-            if self.prefetches > 0:
-                ds = ds.prefetch(self.prefetches)
+            ds = ds.prefetch(tf.data.experimental.AUTOTUNE)
             iterator = ds.make_one_shot_iterator()
             samples = iterator.get_next(name='samples')
 
@@ -200,8 +198,7 @@ class Agent(Model):
                 (None, 1)
             ))
             ds = tf.data.Dataset.from_generator(self.buffer, sample_types, sample_shapes)
-            if self.prefetches > 0:
-                ds = ds.prefetch(self.prefetches)
+            ds = ds.prefetch(self.tf.data.experimental.AUTOTUNE)
             iterator = ds.make_one_shot_iterator()
             samples = iterator.get_next(name='samples')
 

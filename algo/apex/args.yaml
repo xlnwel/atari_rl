@@ -11,7 +11,6 @@ agent:
     gamma: &gamma 0.99
     algorithm: rainbow-iqn  # double, duel, iqn. or rainbow-iqn, this could be overwritten by the command argument algorithm
     batch_size: 32
-    prefetches: 5
     n_workers: &n_workers 10
 
     # model path: model_root_dir/model_name/model_name, two model_names ensure each model saved in an independent folder
