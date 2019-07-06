@@ -253,11 +253,11 @@ class Networks(Module):
 
     def _conv_net(self, x, name=None):
         def net(x):
-            x = tf.layers.conv2d(x, 32, 8, strides=4, padding='same', use_bias=False, activation=tf.nn.relu)
-            x = tf.layers.conv2d(x, 64, 4, strides=2, padding='same', use_bias=False, activation=tf.nn.relu)
-            x = tf.layers.conv2d(x, 64, 3, strides=1, padding='same', use_bias=False, activation=tf.nn.relu)
+            x = self.conv_norm_activation(x, 32, 8, strides=4, use_bias=False, norm=None)
+            x = self.conv_norm_activation(x, 64, 4, strides=2, use_bias=False, norm=None)
+            x = self.conv_norm_activation(x, 64, 3, strides=1, use_bias=False, norm=None)
             x = tf.layers.flatten(x)
-            x = tf.layers.dense(x, 512, use_bias=False)
+            x = self.dense(x, 512, use_bias=False)
 
             return x
         if name:
@@ -270,7 +270,7 @@ class Networks(Module):
 
     def _head_net(self, x, out_dim, name=None):
         def net(x, out_dim):
-            layer = self.noisy if self.use_noisy else tf.layers.dense
+            layer = self.noisy if self.use_noisy else self.dense
             name_fn = lambda i: f'noisy_{i}' if self.use_noisy else f'dense_{i}'
             x = layer(x, 512, use_bias=False, name=name_fn(1))
             x = tf.nn.relu(x)

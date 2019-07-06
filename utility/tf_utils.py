@@ -53,14 +53,14 @@ def instance_norm(x, name='InstanceNorm', epsilon=1e-5):
     return x
 
 def norm_activation(x, norm=None, activation=None, training=False, name=None):
-    def fn(x):
+    def fn():
         if norm:
-            x = (norm(x, training=training) if
+            y = (norm(x, training=training) if
                     'batch_normalization' in str(norm) else
                     norm(x))
         if activation:
-            x = activation(x)
-        return x
+            y = activation(x)
+        return y
 
     x = wrap_layer(name, fn)
 

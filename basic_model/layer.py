@@ -101,13 +101,14 @@ class Layer():
               name=None): 
         return tf.layers.conv2d(x, filters, kernel_size, 
                                 strides=strides, padding=padding, 
+                                use_bias=use_bias,
                                 kernel_initializer=kernel_initializer, 
                                 kernel_regularizer=self.l2_regularizer, 
                                 name=name)
 
     def conv_norm_activation(self, x, filters, kernel_size, strides=1, 
-                              padding='same', use_bias=use_bias,
-                              kernel_initializer=kernel_initializer, 
+                              padding='same', use_bias=True,
+                              kernel_initializer=tf_utils.kaiming_initializer(), 
                               norm=tf.layers.batch_normalization, 
                               activation=tf.nn.relu, name=None):
         def layer_imp():
