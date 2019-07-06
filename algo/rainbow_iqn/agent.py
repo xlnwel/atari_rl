@@ -198,7 +198,7 @@ class Agent(Model):
                 (None, 1)
             ))
             ds = tf.data.Dataset.from_generator(self.buffer, sample_types, sample_shapes)
-            ds = ds.prefetch(self.tf.data.experimental.AUTOTUNE)
+            ds = ds.prefetch(tf.data.experimental.AUTOTUNE)
             iterator = ds.make_one_shot_iterator()
             samples = iterator.get_next(name='samples')
 

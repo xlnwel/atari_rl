@@ -52,7 +52,7 @@ class Layer():
 
             return y
 
-        x = self.wrap_layer(name, layer_imp)
+        x = tf_utils.wrap_layer(name, layer_imp)
 
         return x
 
@@ -91,36 +91,40 @@ class Layer():
 
             return y
         
-        x = self.wrap_layer(name, layer_imp)
+        x = tf_utils.wrap_layer(name, layer_imp)
 
         return x
 
-    def conv(self, x, filters, kernel_size, strides=1, padding='same', 
-              kernel_initializer=tf_utils.xavier_initializer(), name=None): 
+    def conv(self, x, filters, kernel_size, strides=1, 
+              padding='same', use_bias=True,
+              kernel_initializer=tf_utils.xavier_initializer(), 
+              name=None): 
         return tf.layers.conv2d(x, filters, kernel_size, 
                                 strides=strides, padding=padding, 
                                 kernel_initializer=kernel_initializer, 
                                 kernel_regularizer=self.l2_regularizer, 
                                 name=name)
 
-    def conv_norm_activation(self, x, filters, kernel_size, strides=1, padding='same', 
-                              kernel_initializer=tf_utils.kaiming_initializer(), 
+    def conv_norm_activation(self, x, filters, kernel_size, strides=1, 
+                              padding='same', use_bias=use_bias,
+                              kernel_initializer=kernel_initializer, 
                               norm=tf.layers.batch_normalization, 
                               activation=tf.nn.relu, name=None):
         def layer_imp():
-            y = self.conv(x, filters, kernel_size, 
-                            strides=strides, padding=padding, 
-                            kernel_initializer=kernel_initializer)
+            y = self.conv(x, filters, kernel_size, strides=strides, 
+                          padding=padding, use_bias=use_bias,
+                          kernel_initializer=kernel_initializer)
             y = tf_utils.norm_activation(y, norm=norm, activation=activation, 
                                             training=self.training)
             
             return y
 
-        x = self.wrap_layer(name, layer_imp)
+        x = tf_utils.wrap_layer(name, layer_imp)
 
         return x
     
-    def conv_resnet(self, x, filters, kernel_size, strides=1, padding='same', 
+    def conv_resnet(self, x, filters, kernel_size, strides=1, 
+                     padding='same', use_bias=True,
                      kernel_initializer=tf_utils.kaiming_initializer(),
                      norm=tf.layers.batch_normalization, name=None):
         """
@@ -133,10 +137,12 @@ class Layer():
 
         with tf.variable_scope(name):
             y = tf_utils.norm_activation(x, norm=norm, activation=tf.nn.relu, training=self.training)
-            y = self.conv_norm_activation(y, filters, kernel_size=kernel_size, strides=strides, padding=padding, 
-                                           kernel_initializer=tf_utils.kaiming_initializer(), 
+            y = self.conv_norm_activation(y, filters, kernel_size=kernel_size, strides=strides, 
+                                           padding=padding, use_bias=use_bias,
+                                           kernel_initializer=kernel_initializer, 
                                            norm=norm, activation=tf.nn.relu)
-            y = self.conv(y, filters, kernel_size, strides=strides, padding=padding,
+            y = self.conv(y, filters, kernel_size, strides=strides, 
+                           padding=padding, use_bias=use_bias,
                            kernel_initializer=kernel_initializer)
             x += y
 
@@ -162,7 +168,7 @@ class Layer():
 
             return y
         
-        x = self.wrap_layer(name, layer_imp)
+        x = tf_utils.wrap_layer(name, layer_imp)
 
         return x
 
@@ -187,7 +193,7 @@ class Layer():
 
             return y
 
-        x = self.wrap_layer(name, layer_imp)
+        x = tf_utils.wrap_layer(name, layer_imp)
 
         return x
 
@@ -268,7 +274,7 @@ class Layer():
             
             return y
 
-        x = self.wrap_layer(name, layer_imp)
+        x = tf_utils.wrap_layer(name, layer_imp)
 
         return x
 
@@ -309,7 +315,7 @@ class Layer():
 
             return y
         
-        x = self.wrap_layer(name, layer_imp)
+        x = tf_utils.wrap_layer(name, layer_imp)
 
         return x
 
