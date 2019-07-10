@@ -2,7 +2,7 @@ import time
 from collections import deque
 import numpy as np
 import tensorflow as tf
-from ray.experimental.tf_utils import TensorFlowVariables
+# from ray.experimental.tf_utils import TensorFlowVariables
 
 from basic_model.model import Model
 from algo.rainbow_iqn.networks import Networks
@@ -10,7 +10,7 @@ from utility.losses import huber_loss
 from utility.utils import pwc
 from utility.tf_utils import n_step_target, stats_summary
 from env.gym_env import GymEnv, GymEnvVec
-from algo.apex.buffer import LocalBuffer
+# from algo.apex.buffer import LocalBuffer
 from replay.proportional_replay import ProportionalPrioritizedReplay
 from replay.uniform_replay import UniformReplay
 
@@ -53,9 +53,11 @@ class Agent(Model):
             self.buffer = ProportionalPrioritizedReplay(buffer_args, self.env.obs_space)
         elif self.buffer_type == 'uniform':
             self.buffer = UniformReplay(buffer_args, self.env.obs_space)
-        elif self.buffer_type == 'local':
-            buffer_args['local_capacity'] = self.env.max_episode_steps
-            self.buffer = LocalBuffer(buffer_args, self.env.obs_space)
+        # elif self.buffer_type == 'local':
+        #     buffer_args['local_capacity'] = self.env.max_episode_steps
+        #     self.buffer = LocalBuffer(buffer_args, self.env.obs_space)
+        else:
+            raise NotImplementedError
 
         # arguments for prioritized replay
         self.prio_alpha = float(buffer_args['alpha'])
@@ -71,8 +73,8 @@ class Agent(Model):
 
         self._initialize_target_net()
 
-        with self.graph.as_default():
-            self.variables = TensorFlowVariables(self.loss, self.sess)
+        # with self.graph.as_default():
+        #     self.variables = TensorFlowVariables(self.loss, self.sess)
 
     @property
     def max_path_length(self):
