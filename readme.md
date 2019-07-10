@@ -10,14 +10,6 @@ In this project, we implement Rainbow and replace c51 in Rainbow with IQN.
 - [x] Dueling nets
 - [x] IQN
 
-## Overall Architecture
-
-<p align="center">
-<img src="/Architecture.png" alt="Architecture" height="650">
-</p>
-
-Algorithms are implemented in [algo](https://github.com/xlnwel/atari_rl/tree/master/algo)
-
 ## Requirements
 
 It is recommended to install Tensorflow from source following [this instruction](https://www.tensorflow.org/install/source) to gain some CPU boost and other potential benefits.
