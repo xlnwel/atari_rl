@@ -111,7 +111,7 @@ class Module(Layer):
         elif decay_rate != 1.:
             learning_rate = tf.train.exponential_decay(learning_rate, opt_step, decay_steps, decay_rate, staircase=True)
         if self.log_tensorboard and not isinstance(learning_rate, float):
-                tf.summary.scalar('learning_rate_', learning_rate)
+            tf.summary.scalar('learning_rate_', learning_rate)
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=beta1, beta2=beta2, epsilon=epsilon)
 
         return optimizer, learning_rate, opt_step
