@@ -17,16 +17,16 @@ def parse_cmd_args():
                                 'apex-double', 'apex-duel', 'apex-iqn', 'apex-c51', 'apex-rainbow', 'apex-rainbow-iqn'],
                         default='rainbow-iqn')
     parser.add_argument('--background', '-b',
-                        type=str,
-                        choices=['true', 'false', ''],
-                        default='')
+                        type=str2bool,
+                        choices=[True, False],
+                        default=False)
     parser.add_argument('--environment', '-e',
                         type=str,
                         default=None)
     parser.add_argument('--render', '-r',
-                        type=str,
-                        choices=['true', 'false'],
-                        default='false')
+                        type=str2bool,
+                        choices=[True, False],
+                        default=False)
     parser.add_argument('--trials', '-t',
                         type=int,
                         default=1,

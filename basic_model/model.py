@@ -2,7 +2,6 @@ import os, atexit, time
 from pathlib import Path
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras as tk
 
 from utility.utils import pwc
 from utility.debug_tools import assert_colorize, display_var_info
@@ -101,7 +100,7 @@ class Module(Layer):
         epsilon = float(self.args['epsilon']) if 'epsilon' in self.args else 1e-8
 
         # setup optimizer
-        if opt_step or decay_rate != 1.:
+        if opt_step:
             opt_step = tf.Variable(0, trainable=False, name='opt_step')
         else:
             opt_step = None
@@ -144,6 +143,9 @@ class Module(Layer):
 
         return opt_op
 
+    def _get_variable_scope(self, scope_prefix, name):
+        return f'{scope_prefix}/{name}'
+
 
 class Model(Module):
     """ Interface """
@@ -151,7 +153,7 @@ class Model(Module):
                  name, 
                  args,
                  sess_config=None, 
-                 save=True,
+                 save=False, 
                  log_tensorboard=False,
                  log_params=False,
                  log_stats=False,
@@ -176,6 +178,16 @@ class Model(Module):
 
         self.graph = graph if graph else tf.Graph()
 
+        # initialize session and global variables
+        if sess_config is None:
+            sess_config = tf.ConfigProto(intra_op_parallelism_threads=2,
+                                        inter_op_parallelism_threads=2,
+                                        allow_soft_placement=True)
+            # sess_config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=True)
+            sess_config.gpu_options.allow_growth = True
+        self.sess = tf.Session(graph=self.graph, config=sess_config)
+        atexit.register(self.sess.close)
+
         super().__init__(name, args, self.graph, log_tensorboard=log_tensorboard, 
                          log_params=log_params, device=device, reuse=reuse)
 
@@ -193,24 +205,11 @@ class Model(Module):
         if log_tensorboard or log_stats:
             self.writer = self._setup_writer(args['log_root_dir'], self.model_name)
             
-        # initialize session and global variables
-        if sess_config is None:
-            sess_config = tf.ConfigProto(intra_op_parallelism_threads=1,
-                                            inter_op_parallelism_threads=1,
-                                            allow_soft_placement=True)
-            # sess_config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=True)
-        sess_config.gpu_options.allow_growth=True
-        self.sess = tf.Session(graph=self.graph, config=sess_config)
-        atexit.register(self.sess.close)
-    
         self.sess.run(tf.variables_initializer(self.global_variables))
-            
+
         if save:
-            self.saver = self._setup_saver(save)
+            self.saver = self._setup_saver()
             self.model_file = self._setup_model_path(args['model_root_dir'], self.model_name)
-            self.restore(self.model_file)
-        else:
-            pwc('No saver is available')
     
     @property
     def global_variables(self):
@@ -224,22 +223,29 @@ class Model(Module):
         """
         To restore a specific version of model, set filename to the model stored in saved_models
         """
-        if not model_file:
-            pwc('No model file is specified. Restore failed and ignored implicitly.', 'magenta')
-            pass
-        model_file = model_file
+        self.model_file = model_file
+        if not hasattr(self, 'saver'):
+            self.saver = self._setup_saver()
         try:
-            self.saver.restore(self.sess, self.model_file)
+            if os.path.isdir(self.model_file):
+                ckpt = tf.train.get_checkpoint_state(self.model_file)
+                self.saver.restore(self.sess, ckpt.model_checkpoint_path)
+            else:
+                self.saver.restore(self.sess, self.model_file)
         except:
             pwc(f'Model {self.model_name}: No saved model for "{self.name}" is found. \nStart Training from Scratch!',
                 'magenta')
         else:
             pwc(f"Model {self.model_name}: Params for {self.name} are restored.", 'magenta')
 
-    def save(self):
+    def save(self, print_terminal_info=True):
         if hasattr(self, 'saver'):
+            if print_terminal_info:
+                pwc('Model saved', 'magenta')
             return self.saver.save(self.sess, self.model_file)
-        # no intention to treat no saver as an error, just print a warning message
+        else:
+            # no intention to treat no saver as an error, just print a warning message
+            pwc('No saver is available', 'magenta')
 
     def record_stats(self, **kwargs):
         self._record_stats_impl(kwargs)
@@ -251,8 +257,8 @@ class Model(Module):
         self.logger.dump_tabular(print_terminal_info=print_terminal_info)
 
     """ Implementation """
-    def _setup_saver(self, save):
-        return tf.train.Saver(self.global_variables) if save else None
+    def _setup_saver(self):
+        return tf.train.Saver(self.global_variables)
 
     def _setup_model_path(self, root_dir, model_name):
         model_dir = Path(root_dir) / model_name
@@ -279,13 +285,17 @@ class Model(Module):
                 for i in range(times):
                     # stats logs for each worker
                     with tf.variable_scope(f'worker_{i}'):
+                        stats[i]['counter'] = counter = tf.Variable(0, trainable=False, name='counter')
+                        stats[i]['step_op'] = step_op = tf.assign(counter, counter + 1, name='counter_update')
+
                         merge_inputs = []
                         for info in stats_info:
                             stats[i][info] = info_ph = tf.placeholder(tf.float32, name=info)
                             stats[i][f'{info}_log'] = log = tf.summary.scalar(f'{info}_', info_ph)
                             merge_inputs.append(log)
                         
-                        stats[i]['log_op'] = tf.summary.merge(merge_inputs, name='log_op')
+                        with tf.control_dependencies([step_op]):
+                            stats[i]['log_op'] = tf.summary.merge(merge_inputs, name='log_op')
 
         return stats
 
@@ -313,13 +323,15 @@ class Model(Module):
             del kwargs['worker_no']
         
         feed_dict = {}
-        t = kwargs['t']
-        del kwargs['t']
 
         for k, v in kwargs.items():
             assert_colorize(k in self.stats[no], f'{k} is not a valid stats type')
             feed_dict.update({self.stats[no][k]: v})
 
-        summary = self.sess.run(self.stats[no]['log_op'], feed_dict=feed_dict)
+        score_count, summary = self.sess.run([self.stats[no]['counter'], self.stats[no]['log_op']], 
+                                            feed_dict=feed_dict)
 
-        self.writer.add_summary(summary, t)
+        self.writer.add_summary(summary, score_count)
+
+    def _time_to_save(self, train_steps, interval=100):
+        return train_steps % interval == 0

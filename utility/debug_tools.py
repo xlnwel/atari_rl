@@ -4,10 +4,10 @@ import numpy as np
 from utility.utils import colorize, pwc
 
 
-def timeit(func, args=[], kwargs=dict(), name=None, to_print=False):
+def timeit(func, name=None, to_print=False):
 	start_time = gmtime()
 	start = time()
-	result = func(*args, *kwargs)
+	result = func()
 	end = time()
 	end_time = gmtime()
 
@@ -18,7 +18,7 @@ def timeit(func, args=[], kwargs=dict(), name=None, to_print=False):
 													 		 end - start))
 
 	return end - start, result
-	
+
 def assert_colorize(cond, err_msg=''):
     assert cond, colorize(err_msg, 'red')
 
@@ -34,3 +34,4 @@ def display_var_info(vars, name='trainable'):
         pwc(f'   {name}{" "*(100-len(name))} {v_params:d} params {v.shape}', 'yellow')
 
     pwc(f'Total model parameters: {count_params*1e-6:0.2f} million', 'yellow')
+	
