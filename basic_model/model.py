@@ -21,6 +21,7 @@ class Module(Layer):
                  name, 
                  args, 
                  graph=tf.get_default_graph(),
+                 scope_prefix='',
                  log_tensorboard=False, 
                  log_params=False,
                  device=None,
@@ -45,6 +46,8 @@ class Module(Layer):
         self.log_params = log_params
         self.device = device
         self.reuse = reuse
+
+        self.variable_scope = self._get_variable_scope(scope_prefix, name)
 
         super().__init__(name, args)
 
@@ -100,7 +103,7 @@ class Module(Layer):
         epsilon = float(self.args['epsilon']) if 'epsilon' in self.args else 1e-8
 
         # setup optimizer
-        if opt_step:
+        if opt_step or 'decay_steps' in self.args:
             opt_step = tf.Variable(0, trainable=False, name='opt_step')
         else:
             opt_step = None
@@ -123,11 +126,17 @@ class Module(Layer):
             with self.graph.control_dependencies(update_ops):
                 tvars = tvars if tvars else self.trainable_variables
                 grads_vars = optimizer.compute_gradients(loss, var_list=tvars)
-                for i, (grad, var) in enumerate(grads_vars):
-                    if grad is not None:
-                        grads_vars[i] = (tf.clip_by_norm(grad, clip_norm), var)
+                # clip by global norm
+                grads, tvars = zip(*grads_vars)
+                grads, _ = tf.clip_by_global_norm(grads, clip_norm)
+                
+                return list(zip(grads, tvars))
+                # clip by norm
+                # for i, (grad, var) in enumerate(grads_vars):
+                #     if grad is not None:
+                #         grads_vars[i] = (tf.clip_by_norm(grad, clip_norm), var)
         
-        return grads_vars
+                # return grads_vars
 
     def _apply_gradients(self, optimizer, grads_and_vars, opt_step=None):
         opt_op = optimizer.apply_gradients(grads_and_vars, global_step=opt_step, name=self.name + '_apply_gradients')
@@ -180,8 +189,8 @@ class Model(Module):
 
         # initialize session and global variables
         if sess_config is None:
-            sess_config = tf.ConfigProto(intra_op_parallelism_threads=2,
-                                        inter_op_parallelism_threads=2,
+            sess_config = tf.ConfigProto(#intra_op_parallelism_threads=2,
+                                        #inter_op_parallelism_threads=2,
                                         allow_soft_placement=True)
             # sess_config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=True)
             sess_config.gpu_options.allow_growth = True
