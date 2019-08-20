@@ -292,11 +292,11 @@ class Agent(Model):
             
             z_target = n_step_target(self.data['reward'], self.data['done'], 
                                     z_support, self.gamma, self.data['steps'])           # [B, N]
-            z_target = tf.clip_by_value(z_target, v_min, v_max)[:, None, :]   # [B, 1, N]
+            z_target = tf.clip_by_value(z_target, v_min, v_max)[:, None, :]              # [B, 1, N]
             z_original = z_support[None, :, None]                                        # [1, N, 1]
 
             weight = tf.clip_by_value(1.-tf.abs(z_target - z_original) / delta_z, 0, 1)  # [B, N, N]
-            dist_target = tf.reduce_sum(weight * self.Qnets.dist_next_target, axis=2)               # [B, N]
+            dist_target = tf.reduce_sum(weight * self.Qnets.dist_next_target, axis=2)    # [B, N]
             dist_target = tf.stop_gradient(dist_target)
 
             kl_loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=dist_target, logits=self.Qnets.logits)
