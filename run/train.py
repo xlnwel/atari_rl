@@ -4,7 +4,7 @@ import logging
 from copy import deepcopy
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utility.grid_search import GridSearch
+from run.grid_search import GridSearch
 from utility.yaml_op import load_args
 from utility.debug_tools import assert_colorize
 from utility.utils import str2bool
