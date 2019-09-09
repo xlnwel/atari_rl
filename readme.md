@@ -57,10 +57,6 @@ All tests are done in [PongNoFrameskip-v4](https://gym.openai.com/envs/Pong-v0/)
 
 5. I modify the network a little bit, by adding a dense layer before dueling heads. This saves more than 2/3 parameters(10 million vs 36 million, which is mainly induced by the combination of dueling heads and noisy layers). Furthermore, it mitigates overfitting on some environments such as breakout.
 
-6. Background learning is initially designed for Ape-X, which I happened to find out working extremely well on [continuous environments](https://github.com/xlnwel/model-free-algorithms) that do not require a deep net. However, it does not work that well with Atari games. There are two potential reasons I can conjecture:
-    1. Background learning increases the learning frequency, which makes it more likely overfit and get stuck at a local optimum. Methods such as regularization and disentanglement might help alleviate the issue.
-    2. I use a new thread to do background learning, which actually does not achieve parallelism because of Python's GIL. This actually slows down the interaction with the environment, and exacerbate model overfitting. Multi-processing achieved in Ape-X alleviates this issue.
-
 ## Paper References
 
 Dan Horgan et al. Distributed Prioritized Experience Replay 
