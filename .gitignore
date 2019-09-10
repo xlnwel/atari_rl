@@ -1,6 +1,6 @@
 **apex**
 **distributed_train**
-.vscode*
+.vscode/**
 .DS_Store
 *.pyc
-__pycache__
+**__pycache__**
