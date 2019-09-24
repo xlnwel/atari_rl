@@ -43,8 +43,20 @@ def pwc(string, color='red', bold=False, highlight=False):
     else:
         print(colorize(string, color, bold, highlight))
 
-def normalize(x, mean=0., std=1., epsilon=1e-8):
-    x = (x - np.mean(x)) / (np.std(x) + epsilon)
+def normalize(x, axis=None, mean=0., std=1., epsilon=1e-8, mask=None):
+    if mask is None:
+        x_mean = np.mean(x, axis)
+        x_std = np.std(x, axis)
+    else:
+        max_idx = np.max(axis) + 1 if axis else None
+        assert mask.shape == x.shape[:max_idx], f'mask of shape {mask.shape} does not match the first {max_idx} dimensions of x, which has shape {x.shape[:max_idx]}'
+        # compute x_mean and x_std from entries in x corresponding to True in mask
+        n = np.sum(mask, axis)
+        if axis:
+            mask = mask[..., None]
+        x_mean = np.sum(x * mask, axis) / n
+        x_std = np.sqrt(np.sum((x * mask - x_mean)**2, axis) / n)
+    x = (x - x_mean) / (x_std + epsilon)
     x = x * std + mean
 
     return x

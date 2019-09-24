@@ -372,17 +372,33 @@ class Layer():
 
         return x, (initial_state, final_state)
 
-    def lstm_norm(self, x, units, masks, norm=True):
-        kernel_initializer = tf_utils.kaiming_initializer() if norm else tc.layers.xavier_initializer()
-        xw_shape = [x.shape.as_list()[-1], units]
-        xb_shape = [units]
-        hw_shape = [units, units]
-        hb_shape = [units]
+    def lstm_norm(self, xs, units, masks=None):
+        """lstm with masks and layer normalization
         
-        n_batch, n_steps = x.shape.as_list()[:2]
+        Arguments:
+            xs      3d Tensor   --  input data of shape [n_batch, n_seq, dim]
+            units   int         --  size of hidden/cell state
+            masks   2d Tensor   --  masks, must match the first 2 dimensions of xs
+        
+        Returns:
+            ys      3d Tensor   -- output date of shape [n_batch, n_seq, units]
+            initial_state, final_state
+        """
+        assert_colorize(len(xs.shape.as_list()) == 3, 
+                        f'Imput Shape Error: desire tensor of 3 dimensions, get {len(xs.shape.as_list())}')
 
+        assert_colorize(masks is None or len(masks.shape.as_list()) == 2, 
+                        f'Masks Shape Error: desire None or tensor of 2 dimensions, get {len(masks.shape.as_list())}')
+        kernel_initializer = tf_utils.kaiming_initializer()
         ln = tc.layers.layer_norm
 
+        n_batch, n_steps, x_dim = xs.shape.as_list()
+
+        xw_shape = [x_dim, 4*units]
+        xb_shape = [4*units]
+        hw_shape = [units, 4*units]
+        hb_shape = [4*units]
+        
         with tf.variable_scope('lstm_norm'):
             x_w = tf.get_variable('x_w', shape=xw_shape, 
                                   initializer=kernel_initializer,
@@ -397,11 +413,18 @@ class Layer():
                                   initializer=tf.zeros_initializer())
 
             initial_state = tf.zeros([n_batch, 2*units], name='initial_state')
-            h, c = tf.split(value=initial_state, num_or_size_splits=2, axis=1)
-            xs = [tf.squeeze(v, [1]) for v in tf.split(value=x, num_or_size_splits=n_steps, axis=1)]
-            for idx, (x, m) in enumerate(zip(xs, masks)):
-                c *= 1-m
-                h *= 1-m
+            initial_state = tf.split(value=initial_state, num_or_size_splits=2, axis=1)
+            h, c = initial_state
+            xs = tf.unstack(xs, n_steps, axis=1)
+            if masks is not None:
+                masks = tf.unstack(masks, n_steps, axis=1)
+
+            ys = []
+            for x in xs if masks is None else zip(xs, masks):
+                if masks is not None:
+                    x, m = x
+                    c *= m[:, None]
+                    h *= m[:, None]
                 z = ln(tf.matmul(x, x_w) + x_b) + ln(tf.matmul(h, h_w) + h_b)
                 f, i, o, u = tf.split(value=z, num_or_size_splits=4, axis=1)
                 f = tf.nn.sigmoid(f)
@@ -410,12 +433,12 @@ class Layer():
                 u = tf.tanh(u)
                 c = f * c + i * u
                 h = o * tf.tanh(ln(c))
-                xs[idx] = h
+                ys.append(h)
             
             final_state = (h, c)
-            xs = tf.stack(xs, 1)
+            ys = tf.stack(ys, 1)
 
-        return xs, (initial_state, final_state)
+        return ys, (initial_state, final_state)
 
     def attention(self, q, k, v, mask=None):
         # softmax(QK^T/)V
@@ -427,8 +450,8 @@ class Layer():
         # Test code to monitor saturation of softmax
         if hasattr(self, 'log_params') and self.log_params:
             with tf.name_scope('attention'):
-                tf_utils.stats_summary(weights, 'softmax', hist=True)
-                tf_utils.stats_summary(x, 'output')
+                tf_utils.stats_summary('softmax', weights, hist=True)
+                tf_utils.stats_summary('output', x)
         
         return x
 
