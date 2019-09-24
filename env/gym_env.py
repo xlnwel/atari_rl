@@ -3,6 +3,7 @@ import gym
 import ray
 
 from utility import tf_distributions
+from utility.utils import pwc
 from env.wrappers import TimeLimit
 from env.atari_wrappers import make_atari, wrap_deepmind, get_wrapper_by_name
 from utility.debug_tools import assert_colorize
@@ -60,7 +61,8 @@ class GymEnv:
         else:
             self.env = env = gym.make(args['name'])
             # Monitor cannot be used when an episode is terminated due to reaching max_episode_steps
-            if 'video_path' in args:
+            if 'log_video' in args and args['log_video']:
+                pwc(f'video will be logged at {args["video_path"]}')
                 self.env = env = gym.wrappers.Monitor(self.env, args['video_path'], force=True)
 
         env.seed(args['seed'])
@@ -99,7 +101,7 @@ class GymEnv:
 
     def _make_atari(self, args):
         env = make_atari(args['name'])
-        env = gym.wrappers.Monitor(env, args['video_path'], force=True)
+        env = gym.wrappers.Monitor(env, args['video_path'])
         env = wrap_deepmind(env)
         return env
 

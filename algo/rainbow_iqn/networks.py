@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 from basic_model.model import Module
+from utility.tf_utils import get_norm
 from utility.debug_tools import assert_colorize
 
 class Networks(Module):
@@ -15,7 +16,6 @@ class Networks(Module):
                  scope_prefix='',
                  log_tensorboard=False,
                  log_params=False):
-        self.variable_scope = f'{scope_prefix}/{name}'
         self.obs = data['obs']
         self.action = data['action']
         self.next_obs = data['next_obs']
@@ -40,6 +40,7 @@ class Networks(Module):
         super().__init__(name, 
                          args, 
                          graph, 
+                         scope_prefix=scope_prefix,
                          log_tensorboard=log_tensorboard, 
                          log_params=log_params)
 
@@ -253,11 +254,12 @@ class Networks(Module):
 
     def _conv_net(self, x, name=None):
         def net(x):
-            x = self.conv_norm_activation(x, 32, 8, strides=4, use_bias=False, norm=None)
-            x = self.conv_norm_activation(x, 64, 4, strides=2, use_bias=False, norm=None)
-            x = self.conv_norm_activation(x, 64, 3, strides=1, use_bias=False, norm=None)
+            x = self.conv_norm_activation(x, 32, 8, strides=4, use_bias=False, norm=get_norm(self.args['conv_norm']))
+            x = self.conv_norm_activation(x, 64, 4, strides=2, use_bias=False, norm=get_norm(self.args['conv_norm']))
+            x = self.conv_norm_activation(x, 64, 3, strides=1, use_bias=False, norm=get_norm(self.args['conv_norm']))
             x = tf.layers.flatten(x)
-            x = self.dense(x, 512, use_bias=False)
+            # use dense to reduce #parameters introduced by the noisy layer
+            x = self.dense_norm_activation(x, 512, use_bias=False, norm=get_norm(self.args['dense_norm']))
 
             return x
         if name:
@@ -272,9 +274,12 @@ class Networks(Module):
         def net(x, out_dim):
             layer = self.noisy if self.use_noisy else self.dense
             name_fn = lambda i: f'noisy_{i}' if self.use_noisy else f'dense_{i}'
-            x = layer(x, 512, use_bias=False, name=name_fn(1))
+            x = layer(x, 512, name=name_fn(1))
+            if self.args['dense_norm']:
+                norm = get_norm(self.args['dense_norm'])
+                x = norm(x)     # do not consider batch norm here
             x = tf.nn.relu(x)
-            x = layer(x, out_dim, use_bias=False, name=name_fn(2))
+            x = layer(x, out_dim, name=name_fn(2))
             return x
         if name:
             with tf.variable_scope(name):

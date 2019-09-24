@@ -17,17 +17,11 @@ def parse_cmd_args():
                         choices=['double', 'duel', 'iqn', 'c51', 'rainbow', 'rainbow-iqn', 
                                 'apex-double', 'apex-duel', 'apex-iqn', 'apex-c51', 'apex-rainbow', 'apex-rainbow-iqn'],
                         default='rainbow-iqn')
-    parser.add_argument('--background', '-b',
-                        type=str2bool,
-                        choices=[True, False],
-                        default=False)
     parser.add_argument('--environment', '-e',
                         type=str,
                         default=None)
     parser.add_argument('--render', '-r',
-                        type=str2bool,
-                        choices=[True, False],
-                        default=False)
+                        action='store_true')
     parser.add_argument('--trials', '-t',
                         type=int,
                         default=1,
@@ -68,10 +62,6 @@ if __name__ == '__main__':
     main = import_main(algorithm)
     arg_file = get_arg_file(algorithm)
 
-    render = True if cmd_args.render == 'true' else False
-    if cmd_args.background != '':
-        background_learning = True if cmd_args.background == 'true' else False
-
     if cmd_args.file != '':
         args = load_args(arg_file)
         env_args = args['env']
@@ -83,20 +73,17 @@ if __name__ == '__main__':
         agent_args['log_root_dir'], _ = os.path.split(agent_args['model_root_dir'])
         agent_args['log_root_dir'] += '/logs'
 
-        if cmd_args.background != '':
-            agent_args['background_learning'] = background_learning
-        main(env_args, agent_args, buffer_args, render=render)
+        main(env_args, agent_args, buffer_args, render=cmd_args.render)
     else:
         prefix = cmd_args.prefix
         # Although random parameter search is in general better than grid search, 
         # we here continue to go with grid search since it is easier to deal with architecture search
-        gs = GridSearch(arg_file, main, render=render, n_trials=cmd_args.trials, dir_prefix=prefix)
-        if cmd_args.background != '':
-            gs.agent_args['background_learning'] = background_learning
+        gs = GridSearch(arg_file, main, render=cmd_args.render, n_trials=cmd_args.trials, dir_prefix=prefix)
 
         if algorithm:
             gs.agent_args['algorithm'] = algorithm
         if cmd_args.environment:
             gs.env_args['name'] = cmd_args.environment
+        
         # Grid search happens here
-        gs()
+        gs(Qnets=dict(conv_norm=['instance'], dense_norm=['layer']))

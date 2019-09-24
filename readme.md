@@ -45,17 +45,12 @@ python run/train.py
 ## Details
 
 All tests are done in [PongNoFrameskip-v4](https://gym.openai.com/envs/Pong-v0/), 
-1. A hard-won one-week lesson: 
-    1. convolutional layers use 'same' padding
-    2. bias is neither used in convolutional layers nor fully connected layers
 
-2. Double Q nets, noisy layers, PER, multi-steps are used by default. 
+1. Double Q nets, noisy layers, PER, multi-steps are used by default. 
 
-3. Zero states are used as terminal states.
+2. Best arguments are kept in `args.yaml`. Most arguments are from the reference paper, learning rate schedule is from homework3 of UCB [cs285](http://rail.eecs.berkeley.edu/deeprlcourse/).
 
-4. Best arguments are kept in `args.yaml`. Most arguments are from the reference paper, learning rate schedule is from homework3 of UCB [cs294-112](http://rail.eecs.berkeley.edu/deeprlcourse/).
-
-5. I modify the network a little bit, by adding a dense layer before dueling heads. This saves more than 2/3 parameters(10 million vs 36 million, which is mainly induced by the combination of dueling heads and noisy layers). Furthermore, it mitigates overfitting on some environments such as breakout.
+3. I modify the network a little bit, by adding a dense layer before dueling heads. This saves more than 2/3 parameters(10 million vs 36 million, which is mainly induced by the combination of dueling heads and noisy layers). Furthermore, it mitigates overfitting on some environments such as breakout.
 
 ## Paper References
 

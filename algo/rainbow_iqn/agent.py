@@ -7,10 +7,13 @@ import tensorflow as tf
 from basic_model.model import Model
 from algo.rainbow_iqn.networks import Networks
 from utility.losses import huber_loss
-from utility.utils import pwc
+from utility.debug_tools import timeit
+from utility.utils import pwc, timeformat
+from utility.schedule import PiecewiseSchedule
 from utility.tf_utils import n_step_target, stats_summary
 from env.gym_env import GymEnv, GymEnvVec
 # from algo.apex.buffer import LocalBuffer
+from replay.basic_replay import Replay
 from replay.proportional_replay import ProportionalPrioritizedReplay
 from replay.uniform_replay import UniformReplay
 
@@ -71,6 +74,16 @@ class Agent(Model):
                          log_stats=log_stats, 
                          device=device)
 
+        # learing rate schedule
+        n_iterations = float(self.args['max_steps']) / 4.
+        lr = self.args['Qnets']['learning_rate']
+        self.lr_schedule = PiecewiseSchedule([(0, lr), (n_iterations / 10, lr), (n_iterations / 2,  5e-5)],
+                                             outside_value=5e-5)
+        if not self.Qnets.use_noisy:
+            # epsilon greedy schedulear if Q network does not use noisy layers
+            self.exploration_schedule = PiecewiseSchedule([(0, 1.0), (1e6, 0.1), (n_iterations / 2, 0.01)], 
+                                                            outside_value=0.01)
+
         self._initialize_target_net()
 
         # with self.graph.as_default():
@@ -79,7 +92,56 @@ class Agent(Model):
     @property
     def max_path_length(self):
         return self.env.max_episode_steps
-    
+
+    def train(self, render, log_steps):
+        max_steps = float(self.args['max_steps'])
+        score_best = -float('inf')
+
+        itrtimes = deque(maxlen=1000)
+        
+        obs = self.env.reset()
+        t = 0
+        while t <= max_steps:
+            duration, obs = timeit(self.run, (obs, t, log_steps, False))
+            t += log_steps
+
+            # bookkeeping
+            itrtimes.append(duration)
+            episode_scores = self.env.get_episode_rewards()
+            episode_lengths = self.env.get_episode_lengths()
+            if not episode_scores:
+                continue
+
+            score = episode_scores[-1]
+            score_mean = np.mean(episode_scores[-100:])
+            score_std = np.std(episode_scores[-100:])
+            score_best = max(score_best, np.max(episode_scores))
+            epslen_mean = np.mean(episode_lengths[-100:])
+            epslen_std = np.mean(episode_lengths[-100:])
+
+            if hasattr(self, 'stats'):
+                self.record_stats(global_step=t, score=score, score_mean=score_mean, score_std=score_std, score_best=score_best,
+                                epslen_mean=epslen_mean, epslen_std=epslen_std)
+
+            log_info = {
+                'ModelName': f'{self.args["algorithm"]}-{self.model_name}',
+                'Timestep': f'{(t//1000):3d}k',
+                'Iteration': len(episode_scores),
+                'IterationTime': timeformat(np.mean(itrtimes)) + 's',
+                'Score': score,
+                'ScoreMean': score_mean,
+                'ScoreStd': score_mean,
+                'ScoreBest': score_best,
+                'EpsLenMean': epslen_mean,
+                'EpsLenStd': epslen_std,
+                'LearningRate': self.lr_schedule.value(t),
+            }
+            if hasattr(self, 'exploration_schedule'):
+                log_info['Exploration'] = self.exploration_schedule.value(t)
+
+            [self.log_tabular(k, v) for k, v in log_info.items()]
+            self.dump_tabular()
+
     def learn(self, t, lr):
         if not self.Qnets.args['schedule_lr']:
             lr = None
@@ -88,6 +150,24 @@ class Agent(Model):
             self._learn(lr)
         else:
             return
+
+    def run(self, obs, start, steps, render):
+        for i in range(steps):
+            if render:
+                self.env.render()
+            random_act = (not self.buffer.good_to_learn if self.Qnets.use_noisy 
+                          else not self.buffer.good_to_learn 
+                            or np.random.sample() < self.exploration_schedule.value(start+i))
+            action = self.act(obs, random_act=random_act)
+
+            next_obs, reward, done, _ = self.env.step(action)
+            self.add_data(obs, action, reward, done)
+            if self.buffer.good_to_learn:
+                self.learn(i, self.lr_schedule.value(start+i))
+
+            obs = self.env.reset() if done else next_obs
+
+        return obs
 
     def act(self, obs, random_act=False, return_q=False):
         obs = self.buffer.encode_recent_obs(obs)
@@ -110,25 +190,6 @@ class Agent(Model):
 
     def add_data(self, obs, action, reward, done):
         self.buffer.add(obs, action, reward, done)
-
-    def background_learning(self, lr_schedule=None):
-        from utility.debug_tools import timeit
-        while not self.buffer.good_to_learn:
-            time.sleep(1)
-        pwc('Start Learning...', 'green')
-
-        t = 0
-        lt = deque(maxlen=1000)
-        while True:
-            t += 1
-            if lr_schedule:
-                duration, _ = timeit(self._learn, args=(lr_schedule.value(t),))
-            else:
-                duration, _ = timeit(self._learn)
-            lt.append(duration)
-            if t % (self.update_freq * 1000) == 0:
-                pwc(f'{self.model_name}:\tTakes {np.sum(lt):3.2f}s to learn 1000 times', 'green')
-                t = 0
 
     """ Implementation """
     def _build_graph(self):
@@ -357,7 +418,7 @@ class Agent(Model):
                 tf.summary.scalar('loss_', self.loss)
             
             with tf.name_scope('networks'):
-                stats_summary(self.Qnets.Q, 'Q')
+                stats_summary('Q', self.Qnets.Q)
 
     def _learn(self, lr=None):
         if lr:
@@ -374,7 +435,8 @@ class Agent(Model):
 
                 if self.update_step % 100 == 0:
                     self.writer.add_summary(summary, self.update_step)
-                    self.save()
+                    if hasattr(self, 'saver'):
+                        self.save()
             else:
                 if self.buffer_type == 'proportional':
                     priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
@@ -394,7 +456,8 @@ class Agent(Model):
 
                 if self.update_step % 100 == 0:
                     self.writer.add_summary(summary, self.update_step)
-                    self.save()
+                    if hasattr(self, 'saver'):
+                        self.save()
             else:
                 if self.buffer_type == 'proportional':
                     priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
