@@ -254,12 +254,12 @@ class Networks(Module):
 
     def _conv_net(self, x, name=None):
         def net(x):
-            x = self.conv_norm_activation(x, 32, 8, strides=4, use_bias=False, norm=get_norm(self.args['conv_norm']))
-            x = self.conv_norm_activation(x, 64, 4, strides=2, use_bias=False, norm=get_norm(self.args['conv_norm']))
-            x = self.conv_norm_activation(x, 64, 3, strides=1, use_bias=False, norm=get_norm(self.args['conv_norm']))
+            x = self.conv_norm_activation(x, 32, 8, strides=4, norm=get_norm(self.args['conv_norm']))
+            x = self.conv_norm_activation(x, 64, 4, strides=2, norm=get_norm(self.args['conv_norm']))
+            x = self.conv_norm_activation(x, 64, 3, strides=1, norm=get_norm(self.args['conv_norm']))
             x = tf.layers.flatten(x)
             # use dense to reduce #parameters introduced by the noisy layer
-            x = self.dense_norm_activation(x, 512, use_bias=False, norm=get_norm(self.args['dense_norm']))
+            # x = self.dense_norm_activation(x, 512, use_bias=False, norm=get_norm(self.args['dense_norm']))
 
             return x
         if name:

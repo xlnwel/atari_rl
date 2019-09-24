@@ -5,7 +5,7 @@ env:
     log_video: True
     video_path: video
     name: BreakoutNoFrameskip-v4    # PongNoFrameskip-v4, BreakoutNoFrameskip-v4, MontezumaRevengeNoFrameskip-v0
-    max_episode_steps: 27000
+    max_episode_steps: 27000        # 108K frames / 4 frames per step
     seed: 0
 agent:
     gamma: &gamma 0.99
@@ -26,7 +26,7 @@ agent:
     target_update_freq: 10000
     
     Qnets:
-        conv_norm: instance
+        conv_norm: no
         dense_norm: layer
         noisy: True         # use noisy net or scheduled epsilon-greedy
         noisy_sigma: 0.5    # standard deviation for noisy layers
