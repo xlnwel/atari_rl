@@ -38,6 +38,7 @@ agent:
         # args for optimizer
         schedule_lr: False
         learning_rate: 6.25e-5
+        epsilon: 1.5e-4
         # end_lr: 6.25e-5
         clip_norm: 10
     env_stats:
