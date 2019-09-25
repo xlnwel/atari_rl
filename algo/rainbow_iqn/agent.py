@@ -1,3 +1,4 @@
+import os
 import time
 from collections import deque
 import numpy as np
@@ -76,9 +77,10 @@ class Agent(Model):
 
         # learing rate schedule
         n_iterations = float(self.args['max_steps']) / 4.
-        lr = self.args['Qnets']['learning_rate']
-        self.lr_schedule = PiecewiseSchedule([(0, lr), (n_iterations / 10, lr), (n_iterations / 2,  5e-5)],
-                                             outside_value=5e-5)
+        lr = float(self.args['Qnets']['learning_rate'])
+        end_lr = float(self.args['Qnets']['end_lr'])
+        self.lr_schedule = PiecewiseSchedule([(0, lr), (n_iterations / 10, lr), (n_iterations / 2,  end_lr)],
+                                             outside_value=end_lr)
         if not self.Qnets.use_noisy:
             # epsilon greedy schedulear if Q network does not use noisy layers
             self.exploration_schedule = PiecewiseSchedule([(0, 1.0), (1e6, 0.1), (n_iterations / 2, 0.01)], 
@@ -100,7 +102,14 @@ class Agent(Model):
         itrtimes = deque(maxlen=1000)
         
         obs = self.env.reset()
-        t = 0
+        if os.path.isdir(self.model_file):
+            pwc(f't is restored')
+            t = self.sess.run(self.stats[0]['counter'])
+        else:
+            pwc('t is set to zero')
+            t = 0
+        pwc(f'Initial timestep: {t}')
+
         while t <= max_steps:
             duration, obs = timeit(self.run, (obs, t, log_steps, False))
             t += log_steps
@@ -120,12 +129,13 @@ class Agent(Model):
             epslen_std = np.mean(episode_lengths[-100:])
 
             if hasattr(self, 'stats'):
-                self.record_stats(global_step=t, score=score, score_mean=score_mean, score_std=score_std, score_best=score_best,
-                                epslen_mean=epslen_mean, epslen_std=epslen_std)
+                self.record_stats(global_step=t, score=score, score_mean=score_mean, 
+                                  score_std=score_std, score_best=score_best,
+                                  epslen_mean=epslen_mean, epslen_std=epslen_std)
 
             log_info = {
                 'ModelName': f'{self.args["algorithm"]}-{self.model_name}',
-                'Timestep': f'{(t//1000):3d}k',
+                'Timestep': f'{(t//1000):,}k',
                 'Iteration': len(episode_scores),
                 'IterationTime': timeformat(np.mean(itrtimes)) + 's',
                 'Score': score,
@@ -141,6 +151,9 @@ class Agent(Model):
 
             [self.log_tabular(k, v) for k, v in log_info.items()]
             self.dump_tabular()
+
+            if hasattr(self, 'saver'):
+                self.save()
 
     def learn(self, t, lr):
         if not self.Qnets.args['schedule_lr']:
@@ -166,9 +179,6 @@ class Agent(Model):
                 self.learn(i, self.lr_schedule.value(start+i))
 
             obs = self.env.reset() if done else next_obs
-
-        if hasattr(self, 'saver'):
-            self.save()
             
         return obs
 
@@ -429,44 +439,48 @@ class Agent(Model):
             feed_dict = {self.learning_rate: lr}
             if self.log_tensorboard:
                 if self.buffer_type == 'proportional':
-                    priority, saved_mem_idxs, _, summary = self.sess.run([self.priority, 
-                                                                        self.data['saved_mem_idxs'], 
-                                                                        self.opt_op, 
-                                                                        self.graph_summary], 
-                                                                        feed_dict=feed_dict)
+                    priority, saved_mem_idxs, _, self.update_step, summary = self.sess.run(
+                                                                                [self.priority, 
+                                                                                self.data['saved_mem_idxs'], 
+                                                                                self.opt_op, 
+                                                                                self.opt_step,
+                                                                                self.graph_summary], 
+                                                                                feed_dict=feed_dict)
                 else:
-                    _, summary = self.sess.run([self.opt_op, self.graph_summary], feed_dict=feed_dict)
+                    _, self.update_step, summary = self.sess.run([self.opt_op, self.opt_step, self.graph_summary], feed_dict=feed_dict)
 
                 if self.update_step % 100 == 0:
                     self.writer.add_summary(summary, self.update_step)
             else:
                 if self.buffer_type == 'proportional':
-                    priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
-                                                                self.data['saved_mem_idxs'], 
-                                                                self.opt_op], feed_dict=feed_dict)
+                    priority, saved_mem_idxs, _, self.update_step = self.sess.run([self.priority, 
+                                                                        self.data['saved_mem_idxs'], 
+                                                                        self.opt_op, 
+                                                                        self.opt_step], feed_dict=feed_dict)
                 else:
-                    _ = self.sess.run([self.opt_op], feed_dict=feed_dict)
+                    _, self.update_step = self.sess.run([self.opt_op, self.opt_step], feed_dict=feed_dict)
         else:
             if self.log_tensorboard:
                 if self.buffer_type == 'proportional':
-                    priority, saved_mem_idxs, _, summary = self.sess.run([self.priority, 
-                                                                        self.data['saved_mem_idxs'], 
-                                                                        self.opt_op, 
-                                                                        self.graph_summary])
+                    priority, saved_mem_idxs, _, self.update_step, summary = self.sess.run([self.priority, 
+                                                                                self.data['saved_mem_idxs'], 
+                                                                                self.opt_op, 
+                                                                                self.opt_step,
+                                                                                self.graph_summary])
                 else:
-                    _, summary = self.sess.run([self.opt_op, self.graph_summary])
+                    _, self.update_step, summary = self.sess.run([self.opt_op, self.opt_step, self.graph_summary])
 
                 if self.update_step % 100 == 0:
                     self.writer.add_summary(summary, self.update_step)
             else:
                 if self.buffer_type == 'proportional':
-                    priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
-                                                                self.data['saved_mem_idxs'], 
-                                                                self.opt_op])
+                    priority, saved_mem_idxs, _, self.update_step = self.sess.run([self.priority, 
+                                                                        self.data['saved_mem_idxs'], 
+                                                                        self.opt_op,
+                                                                        self.opt_step])
                 else:
-                    _ = self.sess.run([self.opt_op])
+                    _, self.update_step = self.sess.run([self.opt_op, self.opt_step])
         # update the target networks
         self._update_target_net()
-        self.update_step += 1
         if self.buffer_type == 'proportional':
             self.buffer.update_priorities(priority, saved_mem_idxs)

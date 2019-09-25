@@ -44,13 +44,13 @@ python run/train.py
 
 ## Details
 
-All tests are done in [PongNoFrameskip-v4](https://gym.openai.com/envs/Pong-v0/), 
+All tests are done in PongNoFrameskip-v4 and BreakoutNoFrameskip-v4, 
 
 1. Double Q nets, noisy layers, PER, multi-steps are used by default. 
 
-2. Best arguments are kept in `args.yaml`. Most arguments are from the reference paper, learning rate schedule is from homework3 of UCB [cs285](http://rail.eecs.berkeley.edu/deeprlcourse/).
+2. Best arguments are kept in `args.yaml`; most arguments come from the rainbow.
 
-3. I modify the network a little bit, by adding a dense layer before dueling heads. This saves more than 2/3 parameters(10 million vs 36 million, which is mainly induced by the combination of dueling heads and noisy layers). Furthermore, it mitigates overfitting on some environments such as breakout.
+3. Unlike the official implementation, we apply layer normalization to dense layers, instance normalization to conv layers. Tehse could be designated by `conv_norm` and `dense_norm` in `algo/rainbow_iqn/args.yaml`
 
 ## Paper References
 

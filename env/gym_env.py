@@ -108,10 +108,11 @@ class GymEnv:
 
 @envstats
 class GymEnvVec:
+    """ Not tested yet """
     def __init__(self, args):
         assert_colorize('n_envs' in args, f'Please specify n_envs in args.yaml beforehand')
-        n_envs = args['n_envs']
-        self.envs = [gym.make(args['name']) for i in range(n_envs)]
+        self.n_envs = n_envs = args['n_envs']
+        self.envs = [self._make_atari(args) for i in range(n_envs)]
         [env.seed(args['seed'] + 10 * i) for i, env in enumerate(self.envs)]
 
         env = self.envs[0]
@@ -121,13 +122,30 @@ class GymEnvVec:
         self.action_dim = env.action_space.n if self.is_action_discrete else env.action_space.shape[0]
         self.action_dist_type = action_dist_type(env)
         
-        self.n_envs = n_envs
         self.max_episode_steps = int(float(args['max_episode_steps'])) if 'max_episode_steps' in args \
                                     else env.spec.max_episode_steps
 
+    def get_episode_rewards(self):
+        return np.array([get_wrapper_by_name(env, 'Monitor').get_episode_rewards() for env in self.envs])
+    
+    def get_episode_lengths(self):
+        return np.array([get_wrapper_by_name(env, 'Monitor').get_episode_lengths() for env in self.envs])
+
+    def get_total_steps(self):
+        return np.array([get_wrapper_by_name(env, 'Monitor').get_total_steps() for env in self.envs])
+
+    def random_action(self):
+        return [env.action_space.sample() for env in self.envs]
+        
     def reset(self):
         return [env.reset() for env in self.envs]
     
     def step(self, actions):
         actions = np.squeeze(actions)
         return list(zip(*[env.step(a) for env, a in zip(self.envs, actions)]))
+
+    def _make_atari(self, args):
+        env = make_atari(args['name'])
+        env = gym.wrappers.Monitor(env, args['video_path'])
+        env = wrap_deepmind(env)
+        return env
