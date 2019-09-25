@@ -88,9 +88,9 @@ class Module(Layer):
         with tf.variable_scope(self.name + '_optimizer'):
             optimizer, learning_rate, opt_step = self._adam_optimizer(opt_step=opt_step, schedule_lr=schedule_lr)
             grads_and_vars = self._compute_gradients(loss, optimizer, tvars=tvars)
-            opt = self._apply_gradients(optimizer, grads_and_vars, opt_step)
+            opt_op = self._apply_gradients(optimizer, grads_and_vars, opt_step)
 
-        return opt, learning_rate, opt_step
+        return optimizer, learning_rate, opt_step, grads_and_vars, opt_op
 
     def _adam_optimizer(self, opt_step=None, schedule_lr=False):
         # params for optimizer

@@ -36,8 +36,9 @@ agent:
         delta: 1            # kappa in paper, used in huber loss
         quantile_embedding_dim: 64
         # args for optimizer
-        schedule_lr: True
-        learning_rate: 1.e-4
+        schedule_lr: False
+        learning_rate: 6.25e-5
+        # end_lr: 6.25e-5
         clip_norm: 10
     env_stats:
         times: 1

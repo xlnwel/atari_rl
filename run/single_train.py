@@ -21,10 +21,9 @@ def main(env_args, agent_args, buffer_args, render=False):
                                  inter_op_parallelism_threads=1,
                                  allow_soft_placement=True)
     sess_config.gpu_options.allow_growth = True
-    agent = Agent('Agent', agent_args, env_args, buffer_args, 
+    agent = Agent('Agent', agent_args, env_args, buffer_args, save=True,
                 log_tensorboard=True, log_stats=True, log_params=False, device='/GPU:0')
 
     model = agent_args['model_name']
-    pwc(f'Model {model} starts training')
     
     agent.train(render, log_steps=int(1e4))

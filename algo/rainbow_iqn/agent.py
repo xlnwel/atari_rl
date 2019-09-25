@@ -167,6 +167,9 @@ class Agent(Model):
 
             obs = self.env.reset() if done else next_obs
 
+        if hasattr(self, 'saver'):
+            self.save()
+            
         return obs
 
     def act(self, obs, random_act=False, return_q=False):
@@ -200,7 +203,8 @@ class Agent(Model):
 
         self.priority, self.loss = self._loss()
 
-        self.opt_op, self.learning_rate, self.opt_step = self.Qnets._optimization_op(self.loss, 
+        _, self.learning_rate, self.opt_step, _, self.opt_op = self.Qnets._optimization_op(
+                                                                            self.loss, 
                                                                             tvars=self.Qnets.main_variables,
                                                                             opt_step=True, schedule_lr=self.Qnets.args['schedule_lr'])
 
@@ -435,8 +439,6 @@ class Agent(Model):
 
                 if self.update_step % 100 == 0:
                     self.writer.add_summary(summary, self.update_step)
-                    if hasattr(self, 'saver'):
-                        self.save()
             else:
                 if self.buffer_type == 'proportional':
                     priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
@@ -456,8 +458,6 @@ class Agent(Model):
 
                 if self.update_step % 100 == 0:
                     self.writer.add_summary(summary, self.update_step)
-                    if hasattr(self, 'saver'):
-                        self.save()
             else:
                 if self.buffer_type == 'proportional':
                     priority, saved_mem_idxs, _ = self.sess.run([self.priority, 
