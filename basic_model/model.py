@@ -234,7 +234,8 @@ class Model(Module):
         """
         To restore a specific version of model, set filename to the model stored in saved_models
         """
-        self.model_file = model_file
+        if model_file:
+            self.model_file = model_file
         if not hasattr(self, 'saver'):
             self.saver = self._setup_saver()
         try:

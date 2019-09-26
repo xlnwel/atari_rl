@@ -13,7 +13,7 @@ from utility.schedule import PiecewiseSchedule
 from algo.rainbow_iqn.agent import Agent
 
 
-def main(env_args, agent_args, buffer_args, render=False):
+def main(env_args, agent_args, buffer_args, render=False, restore=False):
     set_global_seed()
 
     agent_args['env_stats']['times'] = 1
@@ -22,8 +22,8 @@ def main(env_args, agent_args, buffer_args, render=False):
                                  allow_soft_placement=True)
     sess_config.gpu_options.allow_growth = True
     agent = Agent('Agent', agent_args, env_args, buffer_args, save=True,
-                log_tensorboard=True, log_stats=True, log_params=False, device='/GPU:0')
-
-    model = agent_args['model_name']
+                log_tensorboard=False, log_stats=True, log_params=False, device='/GPU:0')
+    if restore:
+        agent.restore()
     
     agent.train(render, log_steps=int(1e4))

@@ -29,10 +29,10 @@ def parse_cmd_args():
     parser.add_argument('--prefix', '-p',
                         default='',
                         help='prefix for model dir')
-    parser.add_argument('--file', '-f',
+    parser.add_argument('--checkpoint', '-c',
                         type=str,
                         default='',
-                        help='filepath to restore')
+                        help='checkpoint path to restore, of form "model_root_dir/model_name"')
     args = parser.parse_args()
 
     return args
@@ -62,18 +62,19 @@ if __name__ == '__main__':
     main = import_main(algorithm)
     arg_file = get_arg_file(algorithm)
 
-    if cmd_args.file != '':
+    if cmd_args.checkpoint != '':
         args = load_args(arg_file)
         env_args = args['env']
         agent_args = args['agent']
         buffer_args = args['buffer'] if 'buffer' in args else {}
-        model_file = cmd_args.file
-        assert_colorize(os.path.exists(model_file), 'Model file does not exists')
+        model_file = cmd_args.checkpoint
+        assert_colorize(os.path.exists(model_file), 'Model dir does not exists')
         agent_args['model_root_dir'], agent_args['model_name'] = os.path.split(model_file)
-        agent_args['log_root_dir'], _ = os.path.split(agent_args['model_root_dir'])
-        agent_args['log_root_dir'] += '/logs'
+        predir, _ = os.path.split(agent_args['model_root_dir'])
+        agent_args['log_root_dir'] = predir + '/logs'
+        env_args['video_path'] = predir + '/video'
 
-        main(env_args, agent_args, buffer_args, render=cmd_args.render)
+        main(env_args, agent_args, buffer_args, render=cmd_args.render, restore=True)
     else:
         prefix = cmd_args.prefix
         # Although random parameter search is in general better than grid search, 

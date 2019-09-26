@@ -102,13 +102,11 @@ class Agent(Model):
         itrtimes = deque(maxlen=1000)
         
         obs = self.env.reset()
+
         if os.path.isdir(self.model_file):
-            pwc(f't is restored')
             t = self.sess.run(self.stats[0]['counter'])
         else:
-            pwc('t is set to zero')
             t = 0
-        pwc(f'Initial timestep: {t}')
 
         while t <= max_steps:
             duration, obs = timeit(self.run, (obs, t, log_steps, False))
