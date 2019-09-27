@@ -28,10 +28,12 @@ class Agent(Model):
                  buffer_args, 
                  sess_config=None, 
                  save=False, 
+                 log=False,
                  log_tensorboard=False, 
                  log_params=False, 
                  log_stats=False, 
-                 device=None):
+                 device=None,
+                 reuse=None):
         # hyperparameters
         self.gamma = args['gamma'] if 'gamma' in args else .99
         self.update_freq = args['update_freq']
@@ -70,20 +72,21 @@ class Agent(Model):
         super().__init__(name, args, 
                          sess_config=sess_config, 
                          save=save, 
+                         log=log,
                          log_tensorboard=log_tensorboard, 
                          log_params=log_params, 
                          log_stats=log_stats, 
                          device=device)
 
         # learing rate schedule
-        n_iterations = float(self.args['max_steps']) / 4.
+        decay_duration = float(self.args['max_steps']) / 10 # 2e7
         lr = float(self.args['Qnets']['learning_rate'])
         end_lr = float(self.args['Qnets']['end_lr'])
-        self.lr_schedule = PiecewiseSchedule([(0, lr), (n_iterations / 10, lr), (n_iterations / 2,  end_lr)],
+        self.lr_schedule = PiecewiseSchedule([(0, lr), (decay_duration / 8, lr), (decay_duration / 4,  end_lr)],
                                              outside_value=end_lr)
         if not self.Qnets.use_noisy:
             # epsilon greedy schedulear if Q network does not use noisy layers
-            self.exploration_schedule = PiecewiseSchedule([(0, 1.0), (1e6, 0.1), (n_iterations / 2, 0.01)], 
+            self.exploration_schedule = PiecewiseSchedule([(0, 1.0), (1e6, 0.1), (decay_duration / 2, 0.01)], 
                                                             outside_value=0.01)
 
         self._initialize_target_net()
@@ -95,64 +98,6 @@ class Agent(Model):
     def max_path_length(self):
         return self.env.max_episode_steps
 
-    def train(self, render, log_steps):
-        max_steps = float(self.args['max_steps'])
-        score_best = -float('inf')
-
-        itrtimes = deque(maxlen=1000)
-        
-        obs = self.env.reset()
-
-        if os.path.isdir(self.model_file):
-            t = self.sess.run(self.stats[0]['counter'])
-        else:
-            t = 0
-
-        while t <= max_steps:
-            duration, obs = timeit(self.run, (obs, t, log_steps, False))
-            t += log_steps
-
-            # bookkeeping
-            itrtimes.append(duration)
-            episode_scores = self.env.get_episode_rewards()
-            episode_lengths = self.env.get_episode_lengths()
-            if not episode_scores:
-                continue
-
-            score = episode_scores[-1]
-            score_mean = np.mean(episode_scores[-100:])
-            score_std = np.std(episode_scores[-100:])
-            score_best = max(score_best, np.max(episode_scores))
-            epslen_mean = np.mean(episode_lengths[-100:])
-            epslen_std = np.mean(episode_lengths[-100:])
-
-            if hasattr(self, 'stats'):
-                self.record_stats(global_step=t, score=score, score_mean=score_mean, 
-                                  score_std=score_std, score_best=score_best,
-                                  epslen_mean=epslen_mean, epslen_std=epslen_std)
-
-            log_info = {
-                'ModelName': f'{self.args["algorithm"]}-{self.model_name}',
-                'Timestep': f'{(t//1000):,}k',
-                'Iteration': len(episode_scores),
-                'IterationTime': timeformat(np.mean(itrtimes)) + 's',
-                'Score': score,
-                'ScoreMean': score_mean,
-                'ScoreStd': score_mean,
-                'ScoreBest': score_best,
-                'EpsLenMean': epslen_mean,
-                'EpsLenStd': epslen_std,
-                'LearningRate': self.lr_schedule.value(t),
-            }
-            if hasattr(self, 'exploration_schedule'):
-                log_info['Exploration'] = self.exploration_schedule.value(t)
-
-            [self.log_tabular(k, v) for k, v in log_info.items()]
-            self.dump_tabular()
-
-            if hasattr(self, 'saver'):
-                self.save()
-
     def learn(self, t, lr):
         if not self.Qnets.args['schedule_lr']:
             lr = None
@@ -162,23 +107,29 @@ class Agent(Model):
         else:
             return
 
-    def run(self, obs, start, steps, render):
-        for i in range(steps):
+    def run(self, steps, tolearn, render):
+        done = False
+        obs = self.env.reset()
+        t = 0
+        while t < 10000 or not done:
+            t += 1
+            steps += 1
             if render:
                 self.env.render()
             random_act = (not self.buffer.good_to_learn if self.Qnets.use_noisy 
                           else not self.buffer.good_to_learn 
-                            or np.random.sample() < self.exploration_schedule.value(start+i))
+                            or np.random.sample() < self.exploration_schedule.value(steps))
             action = self.act(obs, random_act=random_act)
 
             next_obs, reward, done, _ = self.env.step(action)
             self.add_data(obs, action, reward, done)
-            if self.buffer.good_to_learn:
-                self.learn(i, self.lr_schedule.value(start+i))
-
-            obs = self.env.reset() if done else next_obs
+            if tolearn and self.buffer.good_to_learn:
+                self.learn(steps, self.lr_schedule.value(steps))
             
-        return obs
+            obs = next_obs if not done else self.env.reset()
+
+
+        return steps
 
     def act(self, obs, random_act=False, return_q=False):
         obs = self.buffer.encode_recent_obs(obs)

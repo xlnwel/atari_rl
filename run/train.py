@@ -39,9 +39,9 @@ def parse_cmd_args():
 
 def import_main(algorithm):
     if 'apex' in algorithm:
-        from run.distributed_train import main
+        from algo.distributed_train import main
     else:
-        from run.single_train import main
+        from algo.single_train import main
 
     return main
     
@@ -67,12 +67,16 @@ if __name__ == '__main__':
         env_args = args['env']
         agent_args = args['agent']
         buffer_args = args['buffer'] if 'buffer' in args else {}
-        model_file = cmd_args.checkpoint
-        assert_colorize(os.path.exists(model_file), 'Model dir does not exists')
-        agent_args['model_root_dir'], agent_args['model_name'] = os.path.split(model_file)
+        checkpoint = cmd_args.checkpoint
+        assert_colorize(os.path.exists(checkpoint), 'Checkpoint does not exists')
+        agent_args['model_root_dir'], agent_args['model_name'] = os.path.split(checkpoint)
         predir, _ = os.path.split(agent_args['model_root_dir'])
         agent_args['log_root_dir'] = predir + '/logs'
         env_args['video_path'] = predir + '/video'
+        print('model_root_dir', agent_args['model_root_dir'])
+        print('model_name', agent_args['model_name'])
+        print('root_log_dir', agent_args['log_root_dir'])
+        print('video_path', env_args['video_path'])
 
         main(env_args, agent_args, buffer_args, render=cmd_args.render, restore=True)
     else:

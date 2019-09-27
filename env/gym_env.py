@@ -101,8 +101,11 @@ class GymEnv:
 
     def _make_atari(self, args):
         env = make_atari(args['name'])
-        env = gym.wrappers.Monitor(env, args['video_path'])
+        if 'log_video' in args and args['log_video']:
+            # put monitor in middle to proper record episodic information
+            env = gym.wrappers.Monitor(env, args['video_path'], force=True)
         env = wrap_deepmind(env)
+        
         return env
 
 

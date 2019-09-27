@@ -10,7 +10,7 @@ env:
 agent:
     gamma: &gamma 0.99
     algorithm: rainbow-iqn  # double, duel, iqn. or rainbow-iqn, this could be overwritten by the command argument algorithm
-    batch_size: 32
+    batch_size: 64
     max_steps: 2e8          # maximum training steps
 
     # model path: model_root_dir/model_name/, two model_names ensure each model saved in an independent folder
@@ -23,11 +23,11 @@ agent:
     update_freq: 4
     n_steps: 3
     loss_type: huber   # huber or mse
-    target_update_freq: 10000
+    target_update_freq: 8000    # target network updates per target_update_freq online network updates
     
     Qnets:
-        conv_norm: instance # instance, layer, or None
-        dense_norm: layer   # instance, layer, or None
+        conv_norm: instance # instance, layer, or None, for convolutional layers
+        dense_norm: layer   # layer, or None, don't apply instance norm to dense layers
         noisy: True         # use noisy net or scheduled epsilon-greedy
         noisy_sigma: 0.5    # standard deviation for noisy layers
         N: 8                # N in paper, num of quantiles for online quantile network
