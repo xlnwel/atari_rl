@@ -17,11 +17,13 @@ Basically all arguments are from reference papers, I did not take much time to f
 ### Rainbow-IQN on BreakoutNoFrameskip-v4
 
 **Video**
-<iframe width="650" height="400" src="results/rainbow-iqn-breakout.mp4" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+<iframe width="650" height="400" src="results/rainbow-iqn-BreakoutNoFrameskip-v4f" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 **Learning Curve**
+
 <figure>
-  <img src="results/rainbow-iqn-learning-curve" alt="" width="1000">
+  <img src="results/rainbow-iqn-BreakoutNoFrameskip-learning-curve" alt="" width="1000">
   <figcaption></figcaption>
   <style>
     figure figcaption {
