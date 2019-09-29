@@ -18,7 +18,7 @@ Basically all arguments are from reference papers, I did not take much time to f
 
 **Video**
 
-<iframe width="650" height="400" src="results/rainbow-iqn-BreakoutNoFrameskip-v4f" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="650" height="400" src="results/rainbow-iqn-BreakoutNoFrameskip-v4.gif" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 **Learning Curve**
 
