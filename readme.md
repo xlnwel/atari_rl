@@ -18,12 +18,12 @@ Basically all arguments are from reference papers, I did not take much time to f
 
 **Video**
 
-<iframe width="650" height="400" src="results/rainbow-iqn-BreakoutNoFrameskip-v4.gif" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+![](results/rainbow-iqn-BreakoutNoFrameskip-v4.gif)
 
 **Learning Curve**
 
 <figure>
-  <img src="results/rainbow-iqn-BreakoutNoFrameskip-learning-curve" alt="" width="1000">
+  <img src="results/rainbow-iqn-BreakoutNoFrameskip-learning-curve.png" alt="" width="1000">
   <figcaption></figcaption>
   <style>
     figure figcaption {
