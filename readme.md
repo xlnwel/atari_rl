@@ -10,6 +10,26 @@ In this project, we implement Rainbow and replace c51 in Rainbow with IQN.
 - [x] Dueling nets
 - [x] IQN
 
+## Results
+
+Basically all arguments are from reference papers, I did not take much time to fine-tune these arguments, since it takes too long to run a trial on atari.
+
+### Rainbow-IQN on BreakoutNoFrameskip-v4
+
+**Video**
+<iframe width="650" height="400" src="results/rainbow-iqn-breakout.mp4" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+**Learning Curve**
+<figure>
+  <img src="results/rainbow-iqn-learning-curve" alt="" width="1000">
+  <figcaption></figcaption>
+  <style>
+    figure figcaption {
+    text-align: center;
+    }
+  </style>
+</figure>
+
 ## Requirements
 
 It is recommended to install Tensorflow from source following [this instruction](https://www.tensorflow.org/install/source) to gain some CPU boost and other potential benefits.

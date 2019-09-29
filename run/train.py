@@ -91,4 +91,4 @@ if __name__ == '__main__':
             gs.env_args['name'] = cmd_args.environment
         
         # Grid search happens here
-        gs(Qnets=dict(conv_norm=['instance'], dense_norm=['layer']))
+        gs()
