@@ -22,9 +22,10 @@ Basically all arguments are from reference papers, I did not take much time to f
 
 **Learning Curve**
 
+Episodic rewards averaged over 100 episodes **at training time**.
 <figure>
   <img src="results/rainbow-iqn-BreakoutNoFrameskip-learning-curve.png" alt="" width="1000">
-  <figcaption>Episodic rewards averaged over 100 episodes at training time</figcaption>
+  <figcaption></figcaption>
 </figure>
 
 ## Requirements
