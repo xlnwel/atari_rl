@@ -24,7 +24,7 @@ Basically all arguments are from reference papers, I did not take much time to f
 
 <figure>
   <img src="results/rainbow-iqn-BreakoutNoFrameskip-learning-curve.png" alt="" width="1000">
-  <figcaption>Episodic rewards averaged over 100 episodes</figcaption>
+  <figcaption>Episodic rewards averaged over 100 episodes at training time</figcaption>
 </figure>
 
 ## Requirements
