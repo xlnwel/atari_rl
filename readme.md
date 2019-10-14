@@ -28,32 +28,11 @@ Episodic rewards averaged over 100 episodes **at training time**.
   <figcaption></figcaption>
 </figure>
 
-## Requirements
-
-It is recommended to install Tensorflow from source following [this instruction](https://www.tensorflow.org/install/source) to gain some CPU boost and other potential benefits.
-
-```shell
-# Minimal requirements to run the algorithms. Tested on Ubuntu 18.04.2, using Tensorflow 1.13.1.
-# Forget the deprecated warnings... This project is not designed according to Tensorflow 2.X
-conda create -n gym python
-conda activate gym
-pip install -r requirements.txt
-# install gym atari
-pip install 'gym[atari]'
-# Install tensorflow-gpu or install it from scratch as the above instruction suggests
-pip install tensorflow-gpu
-```
-
 ## Running
 
 ```shell
 # Silence tensorflow debug message
 export TF_CPP_MIN_LOG_LEVEL=3
-
-# When running distributed algorithms, restrict numpy to one core
-# Use numpy.__config__.show() to ensure your numpy is using OpenBlas
-# For MKL and detailed reasoning, refer to [this instruction](https://ray.readthedocs.io/en/latest/example-rl-pong.html?highlight=openblas#the-distributed-version)
-export OPENBLAS_NUM_THREADS=1
 
 # By default, this line runs rainbow-iqn, which replaces c51 in rainbow with iqn
 # For full argument specification, please refer to run/train.py
@@ -68,7 +47,7 @@ All tests are done in PongNoFrameskip-v4 and BreakoutNoFrameskip-v4,
 
 2. Best arguments are kept in `args.yaml`; most arguments come from the rainbow.
 
-3. Unlike the official implementation, we apply layer normalization to dense layers, instance normalization to conv layers. Tehse could be designated by `conv_norm` and `dense_norm` in `algo/rainbow_iqn/args.yaml`
+3. Unlike the official implementation, we apply layer normalization to dense layers, instance normalization to conv layers, which could be designated by `conv_norm` and `dense_norm` in `algo/rainbow_iqn/args.yaml`
 
 ## Paper References
 
