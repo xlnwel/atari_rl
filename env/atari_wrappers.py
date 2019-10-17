@@ -288,14 +288,3 @@ def wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False, 
     if frame_stack:
         env = FrameStack(env, 4)
     return env
-
-def get_wrapper_by_name(env, classname):
-    currentenv = env
-    while True:
-        if classname in currentenv.__class__.__name__:
-            return currentenv
-        elif isinstance(env, gym.Wrapper):
-            currentenv = currentenv.env
-        else:
-            raise ValueError("Couldn't find wrapper named %s"%classname)
-            

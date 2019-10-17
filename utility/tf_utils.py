@@ -6,13 +6,13 @@ import tensorflow.keras as tk
 from utility.debug_tools import assert_colorize
 from layers.adain import adaptive_instance_norm
 
-def kaiming_initializer(distribution='truncated_normal', seed=None):
+def kaiming_initializer(scale=2., distribution='truncated_normal', seed=None):
     """ kaiming initializer """
-    return tk.initializers.VarianceScaling(scale=2., mode='fan_in', distribution=distribution, seed=seed)
+    return tk.initializers.VarianceScaling(scale=scale, mode='fan_in', distribution=distribution, seed=seed)
 
-def xavier_initializer(distribution='truncated_normal', seed=None):
+def xavier_initializer(scale=1., distribution='truncated_normal', seed=None):
     """ xavier initializer """
-    return tk.initializers.VarianceScaling(scale=1., mode='fan_avg', distribution=distribution, seed=seed)
+    return tk.initializers.VarianceScaling(scale=scale, mode='fan_avg', distribution=distribution, seed=seed)
 
 def constant_initializer(val):
     return tk.initializers.Constant(val)
@@ -102,7 +102,7 @@ def get_tensor(sess, name=None, op_name=None):
     else:
         return sess.graph.get_tensor_by_name(op_name + ':0')
 
-def n_step_target(reward, done, nth_value, gamma, steps=1):
+def n_step_target(reward, done, nth_value, gamma, steps):
     with tf.variable_scope('n_step_target'):
         n_step_target = tf.stop_gradient(reward 
                                         + gamma**steps
@@ -115,7 +115,7 @@ def stats_summary(name, data, mean=True, std=False, max=False, min=False, hist=F
     if mean:
         tf.summary.scalar(f'{name}_mean_', tf.reduce_mean(data))
     if std:
-        tf.summary.scalar(f'{name}_std_', tf.reduce_mean(data))
+        tf.summary.scalar(f'{name}_std_', tf.math.reduce_std(data))
     if max:
         tf.summary.scalar(f'{name}_max_', tf.reduce_max(data))
     if min:
@@ -123,10 +123,10 @@ def stats_summary(name, data, mean=True, std=False, max=False, min=False, hist=F
     if hist:
         tf.summary.histogram(f'{name}_', data)
 
-def get_vars(scope, graph=tf.get_default_graph()):
+def get_vars(scope, graph=tf.compat.v1.get_default_graph()):
     return [x for x in graph.get_collection(name=tf.GraphKeys.GLOBAL_VARIABLES, scope=scope)]
 
-def count_vars(scope, graph=tf.get_default_graph()):
+def count_vars(scope, graph=tf.compat.v1.get_default_graph()):
     v = get_vars(scope, graph=graph)
     return sum([np.prod(var.shape.as_list()) for var in v])
 
@@ -206,3 +206,11 @@ def get_norm(name):
         return None
     else:
         raise NotImplementedError
+
+def get_sess_config(parallelism_threads):
+    sess_config = tf.ConfigProto(intra_op_parallelism_threads=parallelism_threads,
+                                 inter_op_parallelism_threads=parallelism_threads,
+                                 allow_soft_placement=True)
+    sess_config.gpu_options.allow_growth = True
+
+    return sess_config

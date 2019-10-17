@@ -4,8 +4,8 @@ import ray
 
 from utility import tf_distributions
 from utility.utils import pwc
-from env.wrappers import TimeLimit
-from env.atari_wrappers import make_atari, wrap_deepmind, get_wrapper_by_name
+from env.wrappers import TimeLimit, get_wrapper_by_name
+from env.atari_wrappers import make_atari, wrap_deepmind
 from utility.debug_tools import assert_colorize
 
 
