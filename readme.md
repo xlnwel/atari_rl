@@ -45,8 +45,6 @@ All tests are done in PongNoFrameskip-v4 and BreakoutNoFrameskip-v4,
 
 1. Double Q nets, noisy layers, PER, multi-steps are used by default. 
 
-2. Best arguments are kept in `args.yaml`; most arguments come from the rainbow.
-
 3. Unlike the official implementation, we apply layer normalization to dense layers, instance normalization to conv layers, which could be designated by `conv_norm` and `dense_norm` in `algo/rainbow_iqn/args.yaml`
 
 ## Paper References

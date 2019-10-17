@@ -6,7 +6,7 @@ import tensorflow as tf
 # from ray.experimental.tf_utils import TensorFlowVariables
 
 from basic_model.model import Model
-from algo.rainbow_iqn.networks import Networks
+from algo.rainbow_iqn.networks import Network, DuelDQN, Rainbow, Rainbow_IQN
 from utility.losses import huber_loss
 from utility.debug_tools import timeit
 from utility.utils import pwc, timeformat
@@ -91,9 +91,6 @@ class Agent(Model):
 
         self._initialize_target_net()
 
-        # with self.graph.as_default():
-        #     self.variables = TensorFlowVariables(self.loss, self.sess)
-
     @property
     def max_path_length(self):
         return self.env.max_episode_steps
@@ -124,7 +121,7 @@ class Agent(Model):
             next_obs, reward, done, _ = self.env.step(action)
             self.add_data(obs, action, reward, done)
             if tolearn and self.buffer.good_to_learn:
-                self.learn(steps, self.lr_schedule.value(steps))
+                self.learn(steps, hasattr(self, 'lr_schedule') and self.lr_schedule.value(steps))
             
             obs = next_obs if not done else self.env.reset()
 
@@ -248,22 +245,41 @@ class Agent(Model):
         return data
 
     def _create_nets(self):
-        scope_prefix = self.name
         self.args['Qnets']['batch_size'] = self.args['batch_size']
-        self.args['Qnets']['algo'] = self.algo
-        Qnets = Networks('Nets', 
-                        self.args['Qnets'], 
-                        self.graph, 
-                        self.data, 
-                        self.n_actions,    # n_actions
-                        scope_prefix=scope_prefix,
-                        log_tensorboard=self.log_tensorboard,
-                        log_params=self.log_params)
+        if self.algo == 'duel':
+            Qnets = DuelDQN('Nets', 
+                            self.args['Qnets'], 
+                            self.graph, 
+                            self.data, 
+                            self.n_actions,    # n_actions
+                            scope_prefix=self.name,
+                            log_tensorboard=self.log_tensorboard,
+                            log_params=self.log_params)
+        elif self.algo == 'rainbow':
+            Qnets = Rainbow('Nets', 
+                            self.args['Qnets'], 
+                            self.graph, 
+                            self.data, 
+                            self.n_actions,    # n_actions
+                            scope_prefix=self.name,
+                            log_tensorboard=self.log_tensorboard,
+                            log_params=self.log_params)
+        elif self.algo == 'rainbow-iqn':
+            Qnets = Rainbow_IQN('Nets', 
+                            self.args['Qnets'], 
+                            self.graph, 
+                            self.data, 
+                            self.n_actions,    # n_actions
+                            scope_prefix=self.name,
+                            log_tensorboard=self.log_tensorboard,
+                            log_params=self.log_params)
+        else:
+            raise NotImplementedError
 
         return Qnets
 
     def _loss(self):
-        if self.algo == 'iqn':
+        if self.algo == 'rainbow-iqn':
             return self._iqn_loss()
         elif self.algo == 'c51' or self.algo == 'rainbow':
             return self._c51_loss()
@@ -314,16 +330,16 @@ class Agent(Model):
             z_support = self.Qnets.z_support
             delta_z = self.Qnets.delta_z
             
-            z_target = n_step_target(self.data['reward'], self.data['done'], 
-                                    z_support, self.gamma, self.data['steps'])           # [B, N]
-            z_target = tf.clip_by_value(z_target, v_min, v_max)[:, None, :]              # [B, 1, N]
-            z_original = z_support[None, :, None]                                        # [1, N, 1]
+            Tz = n_step_target(self.data['reward'], self.data['done'], 
+                                z_support[None, :], self.gamma, self.data['steps'])     # [B, N]
+            Tz = tf.clip_by_value(Tz, v_min, v_max)[:, None, :]                         # [B, 1, N]
+            z_original = z_support[None, :, None]                                       # [1, N, 1]
 
-            weight = tf.clip_by_value(1.-tf.abs(z_target - z_original) / delta_z, 0, 1)  # [B, N, N]
-            dist_target = tf.reduce_sum(weight * self.Qnets.dist_next_target, axis=2)    # [B, N]
+            weight = tf.clip_by_value(1. - tf.abs(Tz - z_original) / delta_z, 0, 1)     # [B, N, N]
+            dist_target = tf.reduce_sum(weight * self.Qnets.dist_next_target, axis=2)   # [B, N]
             dist_target = tf.stop_gradient(dist_target)
 
-            kl_loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=dist_target, logits=self.Qnets.logits)
+            kl_loss = - dist_target * tf.log(self.Qnets.dist)
             loss = tf.reduce_mean(kl_loss)
 
         with tf.name_scope('priority'):
@@ -398,7 +414,7 @@ class Agent(Model):
                 else:
                     _, self.update_step, summary = self.sess.run([self.opt_op, self.opt_step, self.graph_summary], feed_dict=feed_dict)
 
-                if self.update_step % 100 == 0:
+                if self.update_step % 1000 == 0:
                     self.writer.add_summary(summary, self.update_step)
             else:
                 if self.buffer_type == 'proportional':
@@ -419,7 +435,7 @@ class Agent(Model):
                 else:
                     _, self.update_step, summary = self.sess.run([self.opt_op, self.opt_step, self.graph_summary])
 
-                if self.update_step % 100 == 0:
+                if self.update_step % 1000 == 0:
                     self.writer.add_summary(summary, self.update_step)
             else:
                 if self.buffer_type == 'proportional':

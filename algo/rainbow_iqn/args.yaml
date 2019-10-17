@@ -26,14 +26,14 @@ agent:
     target_update_freq: 10000    # target network updates per target_update_freq online network updates
     
     Qnets:
-        conv_norm: instance # instance, layer, or None, for convolutional layers
-        dense_norm: layer   # layer, or None, don't apply instance norm to dense layers
+        conv_norm: None     # instance, layer, or None, for convolutional layers
+        dense_norm: None    # layer, or None, don't apply instance norm to dense layers
         noisy: True         # use noisy net or scheduled epsilon-greedy
         noisy_sigma: 0.5    # standard deviation for noisy layers
         N: 8                # N in paper, num of quantiles for online quantile network
         N_prime: 8          # N' in paper, num of quantiles for target quantile network
         K: 32               # K in paper, num of quantiles for action selection
-        delta: 1            # kappa in paper, used in huber loss
+        delta: 1            # 𝜅 in paper, used in huber loss
         quantile_embedding_dim: 64
         # args for optimizer
         schedule_lr: True
