@@ -14,7 +14,8 @@ def parse_cmd_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--algorithm', '-a',
                         type=str,
-                        choices=['double', 'duel', 'iqn', 'c51', 'rainbow', 'rainbow-iqn', 
+                        nargs='*',
+                        choices=['duel', 'iqn', 'c51', 'rainbow', 'rainbow-iqn', 
                                 'apex-double', 'apex-duel', 'apex-iqn', 'apex-c51', 'apex-rainbow', 'apex-rainbow-iqn'],
                         default='rainbow-iqn')
     parser.add_argument('--environment', '-e',
@@ -46,12 +47,14 @@ def import_main(algorithm):
     return main
     
 def get_arg_file(algorithm):
-    if 'apex' in algorithm:
-        arg_file = 'algo/apex/args.yaml'
-    elif algorithm == 'rainbow' or algorithm == 'c51':
-        arg_file = 'algo/rainbow_iqn/c51_args.yaml'
-    else:
+    if algorithm == 'duel':
+        arg_file = 'algo/ddqn/args.yaml'
+    elif algorithm == 'rainbow':
+        arg_file = 'algo/rainbow/args.yaml'
+    elif algorithm == 'rainbow-iqn':
         arg_file = 'algo/rainbow_iqn/args.yaml'
+    else:
+        raise NotImplementedError(f'In valid name {algorithm}')
 
     return arg_file
 
@@ -59,36 +62,45 @@ if __name__ == '__main__':
     cmd_args = parse_cmd_args()
     algorithm = cmd_args.algorithm
 
-    main = import_main(algorithm)
-    arg_file = get_arg_file(algorithm)
+    processes = []
+    for algo in algorithm:
+        main = import_main(algo)
+        arg_file = get_arg_file(algo)
 
-    if cmd_args.checkpoint != '':
-        args = load_args(arg_file)
-        env_args = args['env']
-        agent_args = args['agent']
-        buffer_args = args['buffer'] if 'buffer' in args else {}
-        checkpoint = cmd_args.checkpoint
-        assert_colorize(os.path.exists(checkpoint), 'Checkpoint does not exists')
-        agent_args['model_root_dir'], agent_args['model_name'] = os.path.split(checkpoint)
-        predir, _ = os.path.split(agent_args['model_root_dir'])
-        agent_args['log_root_dir'] = predir + '/logs'
-        env_args['video_path'] = predir + '/video'
-        print('model_root_dir', agent_args['model_root_dir'])
-        print('model_name', agent_args['model_name'])
-        print('root_log_dir', agent_args['log_root_dir'])
-        print('video_path', env_args['video_path'])
+        if cmd_args.checkpoint != '':
+            args = load_args(arg_file)
+            env_args = args['env']
+            agent_args = args['agent']
+            buffer_args = args['buffer'] if 'buffer' in args else {}
+            checkpoint = cmd_args.checkpoint
+            assert_colorize(os.path.exists(checkpoint), 'Checkpoint does not exists')
+            agent_args['model_root_dir'], agent_args['model_name'] = os.path.split(checkpoint)
+            predir, _ = os.path.split(agent_args['model_root_dir'])
+            agent_args['log_root_dir'] = predir + '/logs'
+            env_args['video_path'] = predir + '/video'
+            print('model_root_dir', agent_args['model_root_dir'])
+            print('model_name', agent_args['model_name'])
+            print('root_log_dir', agent_args['log_root_dir'])
+            print('video_path', env_args['video_path'])
 
-        main(env_args, agent_args, buffer_args, render=cmd_args.render, restore=True)
-    else:
-        prefix = cmd_args.prefix
-        # Although random parameter search is in general better than grid search, 
-        # we here continue to go with grid search since it is easier to deal with architecture search
-        gs = GridSearch(arg_file, main, render=cmd_args.render, n_trials=cmd_args.trials, dir_prefix=prefix)
+            main(env_args, agent_args, buffer_args, render=cmd_args.render, restore=True)
+        else:
+            prefix = cmd_args.prefix
+            # Although random parameter search is in general better than grid search, 
+            # we here continue to go with grid search since it is easier to deal with architecture search
+            gs = GridSearch(arg_file, main, render=cmd_args.render, n_trials=cmd_args.trials, dir_prefix=prefix)
 
-        if algorithm:
-            gs.agent_args['algorithm'] = algorithm
-        if cmd_args.environment:
-            gs.env_args['name'] = cmd_args.environment
-        
-        # Grid search happens here
-        gs()
+            if algo:
+                gs.agent_args['algo'] = algo
+            if cmd_args.environment:
+                gs.env_args['name'] = cmd_args.environment
+            
+            # Grid search happens here
+            if algo == 'duel':
+                processes += gs()
+            elif algo == 'rainbow':
+                processes += gs(Qnets=dict(fixup=[True, False]))
+            elif algo == 'rainbow-iqn':
+                processes += gs()
+
+    [p.join() for p in processes]

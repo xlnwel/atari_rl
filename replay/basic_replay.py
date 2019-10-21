@@ -49,20 +49,6 @@ class Replay:
         while True:
             yield self.sample()
 
-    def encode_recent_obs(self, obs):
-        # to avoid complicating code, we expect tb_capacity >= frame_history_len
-        assert_colorize(self.tb_capacity >= self.frame_history_len, 
-                        'Ops: encode_recent_obs will not work correctly')
-        assert_colorize(obs.shape == (84, 84, 1), f'Error shape: {obs.shape}')
-        self.tb['obs'][self.tb_idx] = obs
-        obs = encode_obs(self.tb_idx, self.tb['obs'], 
-                        self.tb['done'], self.frame_history_len, 
-                        self.tb_full, self.tb_capacity)
-
-        assert_colorize(obs.shape == (84, 84, 4), f'Error shape: {obs.shape}')
-
-        return obs
-
     def sample(self):
         assert_colorize(self.good_to_learn, 'There are not sufficient transitions to start learning --- '
                                             f'transitions in buffer: {len(self)}\t'

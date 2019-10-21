@@ -4,15 +4,17 @@ env:
     atari: &atari True
     log_video: True
     video_path: video
-    name: PongNoFrameskip-v4    # PongNoFrameskip-v4, MontezumaRevengeNoFrameskip-v0, BreakoutNoFrameskip-v4
+    name: BreakoutNoFrameskip-v4    # PongNoFrameskip-v4, MontezumaRevengeNoFrameskip-v0, BreakoutNoFrameskip-v4
     max_episode_steps: 27000
     seed: 0
 agent:
     background_learning: False
     gamma: &gamma 0.99
-    algorithm: rainbow-iqn  # double, duel, iqn. or rainbow-iqn, this could be overwritten by the command argument algorithm
+    algorithm: rainbow  # double, duel, iqn. or rainbow-iqn, this could be overwritten by the command argument algorithm
     batch_size: 32
     max_steps: 2e8          # maximum training steps
+    train_steps: 250000
+    eval_steps: 125000
 
     # model path: model_root_dir/model_name/model_name, two model_names ensure each model saved in an independent folder
     # tensorboard path: log_root_dir/model_name
@@ -27,11 +29,11 @@ agent:
     target_update_freq: 8000  # we count update step, which is 4 times frame steps
     
     Qnets:
+        fixup: True
         conv_norm: None     # instance, layer, or None, for convolutional layers
         dense_norm: None    # layer, or None, don't apply instance norm to dense layers
         noisy: True         # use noisy net or scheduled epsilon-greedy
         noisy_sigma: 0.5    # standard deviation for noisy layers
-        # args for optimizer
         v_min: -10
         v_max: 10
         n_atoms: 51
@@ -53,7 +55,7 @@ buffer:
     beta0: 0.4
     epsilon: 1e-4
     beta_steps: 1e6
-    min_size: 8e4
+    min_size: 5e4
     capacity: 1e6
 
     tb_capacity: 100

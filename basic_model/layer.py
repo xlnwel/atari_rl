@@ -231,6 +231,52 @@ class Layer():
 
         return x
 
+    def impala_residual(self, x, norm=None, name=None):
+        name = self.get_name(name, 'impala_residual')
+        filters = x.shape.as_list()[-1]
+        conv = lambda x: tf.layers.conv2d(x, filters, 3, padding='same')
+        
+        return self.residual(x, conv, norm=norm, name=name)
+
+    def fixup_residual(self, x, norm=None, name=None):
+        name = self.get_name(name, 'fixup_residual')
+        filters = x.shape.as_list()[-1]
+        conv = lambda x: tf.layers.conv2d(x, filters, 3, padding='same', use_bias=False)
+        get_bias = lambda name: tf.get_variable(name, shape=[1, 1, filters], initializer=tf.zeros_initializer())
+        get_scale = lambda: tf.get_variable('scale', shape=[1, 1, filters], initializer=tf.constant_initializer(1.))
+        
+        y = x
+        with tf.variable_scope(name):
+            y = tf.nn.relu(y)
+            y = y + get_bias('bias1')
+            y = conv(y)
+            y = y + get_bias('bias2')
+            y = tf.nn.relu(y)
+            y = y + get_bias('bias3')
+            y = conv(y)
+            y = y * get_scale() + get_bias('bias4')
+
+            return x + y
+
+    def impala_cnn(self, x, fixup=True, conv_norm=None, dense_norm=None, name=None):
+        """ Impala network, FIgure 3 in the paper """
+        residual = lambda x, name: (self.fixup_residual if fixup else self.impala_residual)(x, conv_norm, name)
+        def net_fn(x):
+            for i, filters in enumerate([16, 32, 32]):
+                with tf.variable_scope(f'block_{i}_{filters}'):
+                    x = self.conv_norm_activation(x, filters, 3, padding='same', norm=conv_norm)
+                    x = tf.layers.max_pooling2d(x, 3, 2, padding='same')
+                    x = residual(x, f'residual_1')
+                    x = residual(x, f'residual_2')
+            
+            x = tf.nn.relu(x)
+            x = tf.layers.flatten(x)
+            x = self.dense_norm_activation(x, 256, norm=dense_norm)
+
+            return x
+
+        return tf_utils.wrap_layer(name, lambda: net_fn(x))
+
     def upsample_residual(self, x, filters, padding, sn, 
                         norm=tf.layers.batch_normalization, activation=tf.nn.relu, name=None):
         """
@@ -258,99 +304,102 @@ class Layer():
         return x
         
     def noisy(self, x, units, kernel_initializer=tc.layers.xavier_initializer(), 
-               name=None, sigma=.4):
+               name=None, sigma=.4, return_noise=False):
         """ noisy layer using factorized Gaussian noise """
         name = self.get_name(name, 'noisy')
         
-        with tf.variable_scope(name):
-            y = self.dense(x, units, kernel_initializer=kernel_initializer)
+        y = self.dense(x, units, kernel_initializer=kernel_initializer)
             
-            with tf.variable_scope('noisy'):
-                # params for the noisy layer
-                features = x.shape.as_list()[-1]
-                w_in_dim = [features, 1]
-                w_out_dim = [1, units]
-                w_shape = [features, units]
-                b_shape = [units]
+        with tf.variable_scope(name):
+            # params for the noisy layer
+            features = x.shape.as_list()[-1]
+            w_in_dim = [features, 1]
+            w_out_dim = [1, units]
+            w_shape = [features, units]
+            b_shape = [units]
 
-                epsilon_w_in = tf.random.truncated_normal(w_in_dim, stddev=sigma)
-                epsilon_w_in = tf.math.sign(epsilon_w_in) * tf.math.sqrt(tf.math.abs(epsilon_w_in))
-                epsilon_w_out = tf.random.truncated_normal(w_out_dim, stddev=sigma)
-                epsilon_w_out = tf.math.sign(epsilon_w_out) * tf.math.sqrt(tf.math.abs(epsilon_w_out))
-                epsilon_w = tf.matmul(epsilon_w_in, epsilon_w_out, name='epsilon_w')
-                epsilon_b = tf.reshape(epsilon_w_out, b_shape)
-                
-                noisy_w = tf.get_variable('noisy_w', shape=w_shape, 
-                                          initializer=kernel_initializer,
-                                          regularizer=self.l2_regularizer)
-                noisy_b = tf.get_variable('noisy_b', shape=b_shape, 
-                                          initializer=tf.constant_initializer(sigma / np.sqrt(units)))
-                
-                # output of the noisy layer
-                x = tf.matmul(x, noisy_w * epsilon_w) + noisy_b * epsilon_b
-            if hasattr(self, 'log_tensorboard') and self.log_tensorboard:
-                tf_utils.stats_summary('noisy_w', noisy_w, std=True, hist=True)
-                tf_utils.stats_summary('noisy_b', noisy_b, std=True, hist=True)
-                tf_utils.stats_summary('noisy_o', x, std=True, hist=True)
+            epsilon_w_in = tf.random.truncated_normal(w_in_dim, stddev=sigma)
+            epsilon_w_in = tf.math.sign(epsilon_w_in) * tf.math.sqrt(tf.math.abs(epsilon_w_in))
+            epsilon_w_out = tf.random.truncated_normal(w_out_dim, stddev=sigma)
+            epsilon_w_out = tf.math.sign(epsilon_w_out) * tf.math.sqrt(tf.math.abs(epsilon_w_out))
+            epsilon_w = tf.matmul(epsilon_w_in, epsilon_w_out, name='epsilon_w')
+            epsilon_b = tf.reshape(epsilon_w_out, b_shape)
+            
+            noisy_w = tf.get_variable('noisy_w', shape=w_shape, 
+                                        initializer=kernel_initializer,
+                                        regularizer=self.l2_regularizer)
+            noisy_b = tf.get_variable('noisy_b', shape=b_shape, 
+                                        initializer=tf.constant_initializer(sigma / np.sqrt(units)))
+            
+            # output of the noisy layer
+            o = tf.matmul(x, noisy_w * epsilon_w) + noisy_b * epsilon_b
+        if hasattr(self, 'log_tensorboard') and self.log_tensorboard:
+            with tf.name_scope(f'{name}_log'):
+                tf_utils.stats_summary('w', noisy_w, std=True, hist=True)
+                tf_utils.stats_summary('b', noisy_b, std=True, hist=True)
+                tf_utils.stats_summary('o', o, std=True, hist=True)
+                tf_utils.stats_summary('y', y, std=True, hist=True)
 
-            x = x + y
-
-        return x
+        if return_noise:
+            return o, y
+        else:
+            return o + y
 
     def noisy2(self, x, units, kernel_initializer=tc.layers.xavier_initializer(), 
-               name=None, sigma=.4):
+               name=None, sigma=.4, return_noise=False):
         """ noisy layer """
         name = self.get_name(name, 'noisy')
+
+        y = self.dense(x, units, kernel_initializer=kernel_initializer)
         
         with tf.variable_scope(name):
-            y = self.dense(x, units, kernel_initializer=kernel_initializer)
+            # params for the noisy layer
+            features = x.shape.as_list()[-1]
+            w_shape = [features, units]
+            b_shape = [units]
+
+            epsilon_w = tf.random.truncated_normal(w_shape, stddev=sigma, name='epsilon_w')
+            epsilon_b = tf.random.truncated_normal(b_shape, stddev=sigma, name='epsilon_b')
+
+            noisy_w = tf.get_variable('noisy_w', shape=w_shape, 
+                                        initializer=kernel_initializer,
+                                        regularizer=self.l2_regularizer)
+            noisy_b = tf.get_variable('noisy_b', shape=b_shape, 
+                                        initializer=tf.constant_initializer(sigma / np.sqrt(units)))
             
-            with tf.variable_scope('noisy'):
-                # params for the noisy layer
-                features = x.shape.as_list()[-1]
-                w_shape = [features, units]
-                b_shape = [units]
-
-                epsilon_w = tf.random.truncated_normal(w_shape, stddev=sigma, name='epsilon_w')
-                epsilon_b = tf.random.truncated_normal(b_shape, stddev=sigma, name='epsilon_b')
-
-                noisy_w = tf.get_variable('noisy_w', shape=w_shape, 
-                                          initializer=kernel_initializer,
-                                          regularizer=self.l2_regularizer)
-                noisy_b = tf.get_variable('noisy_b', shape=b_shape, 
-                                          initializer=tf.constant_initializer(sigma / np.sqrt(units)))
+            # output of the noisy layer
+            o = tf.matmul(x, noisy_w * epsilon_w) + noisy_b * epsilon_b
+        if hasattr(self, 'log_tensorboard') and self.log_tensorboard:
+            with tf.name_scope(f'{name}_log'):
+                tf_utils.stats_summary('w', noisy_w, std=True, hist=True)
+                tf_utils.stats_summary('b', noisy_b, std=True, hist=True)
+                tf_utils.stats_summary('o', o, std=True, hist=True)
+                tf_utils.stats_summary('y', y, std=True, hist=True)
                 
-                # output of the noisy layer
-                x = tf.matmul(x, noisy_w * epsilon_w) + noisy_b * epsilon_b
-            if hasattr(self, 'log_tensorboard') and self.log_tensorboard:
-                tf_utils.stats_summary('noisy_w', noisy_w, std=True, hist=True)
-                tf_utils.stats_summary('noisy_b', noisy_b, std=True, hist=True)
-                tf_utils.stats_summary('noisy_o', x, std=True, hist=True)
-                
-            x = x + y
-
-        return x
+        if return_noise:
+            return o, y
+        else:
+            return o + y
 
     def noisy_norm_activation(self, x, units, kernel_initializer=tf_utils.kaiming_initializer(),
                                norm=tc.layers.layer_norm, activation=tf.nn.relu, 
                                name=None, sigma=.4):
         def layer_imp():
-            y = self.noisy(x, units, kernel_initializer=kernel_initializer, 
-                            name=name, sigma=sigma)
+            o, y = self.noisy(x, units, kernel_initializer=kernel_initializer, 
+                            name=name, sigma=sigma, return_noise=True)
             y = tf_utils.norm_activation(y, norm=norm, activation=activation, 
                                          training=self.training)
             
-            return y
+            return o + y
 
-        x = tf_utils.wrap_layer(name, layer_imp)
+        result = tf_utils.wrap_layer(name, layer_imp)
 
-        return x
+        return result
 
-    def layer_norm_act(self, x, layer, norm=None, activation=tf.nn.relu, name=None):
+    def layer_norm_activation(self, x, layer, norm=None, activation=tf.nn.relu, name=None):
         """ This function implicitly handle training for batch normalization if self._training is defined """
         def layer_imp():
-            y = x
-            y = layer(y)
+            y = layer(x)
             y = tf_utils.norm_activation(y, norm=norm, activation=activation, 
                                         training=self.training)
 
@@ -359,7 +408,6 @@ class Layer():
         x = tf_utils.wrap_layer(name, layer_imp)
 
         return x
-
 
     def lstm(self, x, units, return_sequences=False):
         assert_colorize(len(x.shape.as_list()) == 3, f'Imput Shape Error: desire shape of dimension 3, get {len(x.shape.as_list())}')

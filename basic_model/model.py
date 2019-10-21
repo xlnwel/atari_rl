@@ -1,6 +1,5 @@
 import os, atexit, time
 from pathlib import Path
-import numpy as np
 import tensorflow as tf
 
 from utility.utils import pwc
@@ -210,7 +209,6 @@ class Model(Module):
 
         # set up logging
         log_dir = os.path.join(args['log_root_dir'], self.model_name)
-        self._save_args(log_dir)
         
         if log:
             self.logger = self._setup_logger(log_dir, self.model_name)
@@ -231,6 +229,7 @@ class Model(Module):
             self.saver = self._setup_saver()
             self.model_file = self._setup_model_path(args['model_root_dir'], self.model_name)
 
+        self._save_args(log_dir)
         self.print_construction_complete()
         
     @property

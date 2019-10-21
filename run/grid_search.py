@@ -29,7 +29,7 @@ class GridSearch:
             # do grid search
             self.agent_args['model_name'] = 'GS'
             self._change_args(**kwargs)
-            [p.join() for p in self.processes]
+        return self.processes
 
     def _dir_setup(self):
         # add date to root directory
@@ -46,8 +46,8 @@ class GridSearch:
         dirs = ['model_root_dir', 'log_root_dir']
         for root_dir in dirs:
             self.agent_args[root_dir] = dir_fn(self.agent_args[root_dir])
-        
-        self.env_args['video_path'] = dir_fn(self.env_args['video_path'])
+        if 'video_path' in self.env_args:
+            self.env_args['video_path'] = f"{dir_fn(self.env_args['video_path'])}/{self.agent_args['model_name']}"
 
     def _change_args(self, **kwargs):
         if kwargs == {}:

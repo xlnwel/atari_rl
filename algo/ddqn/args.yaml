@@ -4,18 +4,19 @@ env:
     atari: &atari True
     log_video: True
     video_path: video
-    name: BreakoutNoFrameskip-v4    # PongNoFrameskip-v4, BreakoutNoFrameskip-v4, MontezumaRevengeNoFrameskip-v0
-    max_episode_steps: 27000        # 108K frames / 4 frames per step
+    name: BreakoutNoFrameskip-v4    # PongNoFrameskip-v4, MontezumaRevengeNoFrameskip-v0, BreakoutNoFrameskip-v4
+    max_episode_steps: 27000
     seed: 0
 agent:
+    background_learning: False
     gamma: &gamma 0.99
-    algorithm: rainbow-iqn  # double, duel, iqn. or rainbow-iqn, this could be overwritten by the command argument algorithm
+    algorithm: duel  # double, duel, iqn. or rainbow-iqn, this could be overwritten by the command argument algorithm
     batch_size: 32
-    max_steps: 1e7          # maximum training steps
-    train_steps: 100000
-    eval_steps: 50000
+    max_steps: 2e8          # maximum training steps
+    train_steps: 250000
+    eval_steps: 125000
 
-    # model path: model_root_dir/model_name/, two model_names ensure each model saved in an independent folder
+    # model path: model_root_dir/model_name/model_name, two model_names ensure each model saved in an independent folder
     # tensorboard path: log_root_dir/model_name
     model_root_dir: saved_models            # root path for savinng models
     log_root_dir: logs  # root path for tensorboard logs
@@ -25,7 +26,7 @@ agent:
     update_freq: 4
     n_steps: 3
     loss_type: huber   # huber or mse
-    target_update_freq: 10000    # target network updates per target_update_freq online network updates
+    target_update_freq: 8000  # we count update step, which is 4 times frame steps
     
     Qnets:
         fixup: True
@@ -33,11 +34,6 @@ agent:
         dense_norm: None    # layer, or None, don't apply instance norm to dense layers
         noisy: True         # use noisy net or scheduled epsilon-greedy
         noisy_sigma: 0.5    # standard deviation for noisy layers
-        N: 8                # N in paper, num of quantiles for online quantile network
-        N_prime: 8          # N' in paper, num of quantiles for target quantile network
-        K: 32               # K in paper, num of quantiles for action selection
-        delta: 1            # 𝜅 in paper, used in huber loss
-        quantile_embedding_dim: 64
         # args for optimizer
         schedule_lr: True
         learning_rate: 1.e-4

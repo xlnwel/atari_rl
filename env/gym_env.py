@@ -1,3 +1,4 @@
+from collections import deque
 import numpy as np
 import gym
 import ray
@@ -5,8 +6,9 @@ import ray
 from utility import tf_distributions
 from utility.utils import pwc
 from env.wrappers import TimeLimit, get_wrapper_by_name
-from env.atari_wrappers import make_atari, wrap_deepmind
+from env.atari_wrappers import make_deepmind_atari
 from utility.debug_tools import assert_colorize
+
 
 
 def action_dist_type(env):
@@ -22,7 +24,7 @@ class envstats:
     def __init__(self, env):
         self.EnvType = env
         self.score = 0
-        self.eps_len = 0
+        self.epslen = 0
         self.early_done = 0
         
         self.env_reset = env.reset
@@ -31,8 +33,11 @@ class envstats:
         self.EnvType.step = self.step
         self.EnvType.early_done = self.early_done
 
-        self.EnvType.get_score = lambda _: self.score
-        self.EnvType.get_length = lambda _: self.eps_len
+        self.EnvType.get_episode_score = lambda _: self.score
+        self.EnvType.get_episode_length = lambda _: self.epslen
+        self.EnvType.get_obs_stack = lambda _: np.concatenate(self.obs_stack, axis=-1)
+        self.obs_stack = deque(maxlen=4)
+
     def __call__(self, *args, **kwargs):
         self.env = self.EnvType(*args, **kwargs)
 
@@ -40,16 +45,20 @@ class envstats:
 
     def reset(self):
         self.score = 0
-        self.eps_len = 0
+        self.epslen = 0
         self.early_done = 0
-        
-        return self.env_reset(self.env)
+        obs = self.env_reset(self.env)
+        for _ in range(3):
+            self.obs_stack.append(np.zeros_like(obs))
+        self.obs_stack.append(obs)
+        return obs
 
     def step(self, action):
         next_obs, reward, done, info = self.env_step(self.env, action)
         self.score += np.where(self.early_done, 0, reward)
-        self.eps_len += np.where(self.early_done, 0, 1)
+        self.epslen += np.where(self.early_done, 0, 1)
         self.early_done = np.array(done)
+        self.obs_stack.append(next_obs)
 
         return next_obs, reward, done, info
 
@@ -57,7 +66,7 @@ class envstats:
 class GymEnv:
     def __init__(self, args):
         if 'atari' in args and args['atari']:
-            self.env = env = self._make_atari(args)
+            self.env = env = make_deepmind_atari(args)
         else:
             self.env = env = gym.make(args['name'])
             # Monitor cannot be used when an episode is terminated due to reaching max_episode_steps
@@ -99,15 +108,6 @@ class GymEnv:
     def render(self):
         return self.env.render()
 
-    def _make_atari(self, args):
-        env = make_atari(args['name'])
-        if 'log_video' in args and args['log_video']:
-            # put monitor in middle to properly record episodic information
-            env = gym.wrappers.Monitor(env, args['video_path'], force=True)
-        env = wrap_deepmind(env)
-        
-        return env
-
 
 @envstats
 class GymEnvVec:
@@ -115,7 +115,7 @@ class GymEnvVec:
     def __init__(self, args):
         assert_colorize('n_envs' in args, f'Please specify n_envs in args.yaml beforehand')
         self.n_envs = n_envs = args['n_envs']
-        self.envs = [self._make_atari(args) for i in range(n_envs)]
+        self.envs = [make_deepmind_atari(args) for i in range(n_envs)]
         [env.seed(args['seed'] + 10 * i) for i, env in enumerate(self.envs)]
 
         env = self.envs[0]
@@ -147,8 +147,9 @@ class GymEnvVec:
         actions = np.squeeze(actions)
         return list(zip(*[env.step(a) for env, a in zip(self.envs, actions)]))
 
-    def _make_atari(self, args):
-        env = make_atari(args['name'])
-        env = gym.wrappers.Monitor(env, args['video_path'])
-        env = wrap_deepmind(env)
-        return env
+
+def create_env(args):
+    if 'n_envs' not in args or args['n_envs'] == 1:
+        return GymEnv(args)
+    else:
+        return GymEnvVec(args)
