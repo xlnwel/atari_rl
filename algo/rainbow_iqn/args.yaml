@@ -25,7 +25,7 @@ agent:
     update_freq: 4
     n_steps: 3
     loss_type: huber   # huber or mse
-    target_update_freq: 10000    # target network updates per target_update_freq online network updates
+    target_update_freq: 8000    # we count update step, which is 4 times frame steps
     
     Qnets:
         fixup: True
@@ -56,7 +56,7 @@ buffer:
     beta0: 0.4
     epsilon: 1e-4
     beta_steps: 1e6
-    min_size: 5e2
+    min_size: 2e4
     capacity: 1e6
 
     tb_capacity: 100

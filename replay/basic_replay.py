@@ -1,7 +1,7 @@
 import threading
 import numpy as np
 
-from utility.debug_tools import assert_colorize
+from utility.debug_tools import assert_colorize, pwc
 from replay.utils import init_buffer, add_buffer, copy_buffer
 from env.utils import encode_obs
 
@@ -112,7 +112,7 @@ class Replay:
 
         # memory is full, recycle buffer via FIFO
         if not self.is_full and end_idx >= self.capacity:
-            print('Memory is fulll')
+            pwc('Memory is fulll', 'green')
             self.is_full = True
         
         self.mem_idx = end_idx % self.capacity

@@ -33,7 +33,7 @@ class Agent(Model):
         # hyperparameters
         self.gamma = args['gamma'] if 'gamma' in args else .99
         self.update_freq = args['update_freq']
-        self.critic_loss_type = args['loss_type']
+        self.loss_type = args['loss_type']
         self.target_update_freq = args['target_update_freq']
         self.update_step = 0
 
@@ -134,7 +134,7 @@ class Agent(Model):
         step = 0
         scores = []
         epslens = []
-        while step < self.train_steps:
+        while step < self.eval_steps:
             score, epslen, step = self.run_episode(self.eval_env, fn, step)
             scores.append(score)
             epslens.append(epslen)
@@ -195,7 +195,8 @@ class Agent(Model):
         _, self.learning_rate, self.opt_step, _, self.opt_op = self.Qnets._optimization_op(
                                                                             self.loss, 
                                                                             tvars=self.Qnets.main_variables,
-                                                                            opt_step=True, schedule_lr=self.Qnets.args['schedule_lr'])
+                                                                            opt_step=True, 
+                                                                            schedule_lr=self.Qnets.args['schedule_lr'])
 
         # target net operations
         self.init_target_op, self.update_target_op = self._target_net_ops()
@@ -296,7 +297,7 @@ class Agent(Model):
                                     self.Qnets.Q_next_target, self.gamma, self.data['steps'])
 
         with tf.name_scope('loss'):
-            loss_func = huber_loss if self.critic_loss_type == 'huber' else tf.square
+            loss_func = huber_loss if self.loss_type == 'huber' else tf.square
             if self.buffer_type == 'proportional':
                 loss = tf.reduce_mean(self.data['IS_ratio'][:, None] * loss_func(Q_error), name='loss')
             else:
@@ -332,7 +333,6 @@ class Agent(Model):
 
     def _update_target_net(self):
         if self.update_step % self.target_update_freq == 0:
-            pwc('Target net synchronized.', color='green')
             self.sess.run(self.update_target_op)
 
     def _log_info(self):

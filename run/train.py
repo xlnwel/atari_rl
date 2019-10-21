@@ -99,7 +99,7 @@ if __name__ == '__main__':
             if algo == 'duel':
                 processes += gs()
             elif algo == 'rainbow':
-                processes += gs(Qnets=dict(fixup=[True, False]))
+                processes += gs()
             elif algo == 'rainbow-iqn':
                 processes += gs()
 

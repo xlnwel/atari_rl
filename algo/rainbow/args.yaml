@@ -12,9 +12,9 @@ agent:
     gamma: &gamma 0.99
     algorithm: rainbow  # double, duel, iqn. or rainbow-iqn, this could be overwritten by the command argument algorithm
     batch_size: 32
-    max_steps: 2e8          # maximum training steps
-    train_steps: 250000
-    eval_steps: 125000
+    max_steps: 1e7          # maximum training steps
+    train_steps: 100000
+    eval_steps: 50000
 
     # model path: model_root_dir/model_name/model_name, two model_names ensure each model saved in an independent folder
     # tensorboard path: log_root_dir/model_name
@@ -25,8 +25,7 @@ agent:
     frame_history_len: 4
     update_freq: 4
     n_steps: 3
-    loss_type: huber   # huber or mse
-    target_update_freq: 8000  # we count update step, which is 4 times frame steps
+    target_update_freq: 8000    # we count update step, which is 4 times frame steps
     
     Qnets:
         fixup: True
@@ -55,7 +54,7 @@ buffer:
     beta0: 0.4
     epsilon: 1e-4
     beta_steps: 1e6
-    min_size: 5e4
+    min_size: 2e4
     capacity: 1e6
 
     tb_capacity: 100

@@ -8,6 +8,7 @@ import tensorflow as tf
 
 from utility.utils import pwc, set_global_seed
 from utility.tf_utils import get_sess_config
+from utility.debug_tools import timeit
 
 
 def train(agent):
@@ -36,9 +37,13 @@ def train(agent):
     obs = agent.env.reset()
     start_time = time.time()
     while step <= max_steps:
-        scores, epslens, step, itr = agent.train(step, itr)
+        train_duration, (scores, epslens, step, itr) = timeit(agent.train, step, itr)
+        pwc(f'Training Duration: {train_duration:2f}s\n', 'blue')
+        pwc(f'Average Score: {np.mean(scores):2f}\n', 'blue')
+        pwc(f'Average Epslen: {np.mean(epslens):2f}', 'blue')
 
-        eval_scores, eval_epslens = agent.eval()
+        eval_duration, (eval_scores, eval_epslens) = timeit(agent.eval)
+        pwc(f'Evaluating Duration: {eval_duration:2f}', 'blue')
 
         # bookkeeping
         score = np.max(eval_scores)
@@ -48,6 +53,10 @@ def train(agent):
         epslen_mean = np.mean(eval_epslens)
         epslen_std = np.mean(eval_epslens)
 
+        if score_best_mean > score_mean:
+            score_best_mean = score_mean
+            agent.save()
+            
         agent.record_stats(global_step=step, score=score, score_mean=score_mean, 
                             score_std=score_std, score_best=score_best,
                             epslen_mean=epslen_mean, epslen_std=epslen_std)
@@ -58,6 +67,7 @@ def train(agent):
             'Episode': itr,
             'TimeElapsed': f'{time.time() - start_time:.2f}s',
             'Score': score,
+            'TrainScoreMean': np.mean(agent.env.get_episode_rewards()[-20:]),
             'ScoreMean': score_mean,
             'ScoreStd': score_std,
             'ScoreBest': score_best,
@@ -71,10 +81,6 @@ def train(agent):
 
         [agent.log_tabular(k, v) for k, v in log_info.items()]
         agent.dump_tabular()
-
-        if score_best_mean > score_mean:
-            score_best_mean = score_mean
-            agent.save()
 
 def get_agent(agent_args):
     algo = agent_args['algorithm']

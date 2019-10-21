@@ -75,10 +75,6 @@ class RainbowIQN(Network):
 
             # 𝜙 function in the paper
             quantiles, x_quantiles = phi_net(n_quantiles, batch_size, quantile_embedding_dim, h_dim)
-            print('n_quantiles shape', n_quantiles)
-            print('batch_size shape', batch_size)
-            print('x_quantiles shape', x_quantiles.shape.as_list())
-            print('x_tiled shape', x_tiled.shape.as_list())
             # Combine outputs of psi and phi
             y = x_tiled * x_quantiles
             # f function in the paper
