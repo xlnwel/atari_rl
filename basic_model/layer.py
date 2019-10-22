@@ -247,11 +247,11 @@ class Layer():
         
         y = x
         with tf.variable_scope(name):
-            y = tf.nn.relu(y)
+            y = tf_utils.norm_activation(y, norm=norm, activation=tf.nn.relu)
             y = y + get_bias('bias1')
             y = conv(y)
             y = y + get_bias('bias2')
-            y = tf.nn.relu(y)
+            y = tf_utils.norm_activation(y, norm=norm, activation=tf.nn.relu)
             y = y + get_bias('bias3')
             y = conv(y)
             y = y * get_scale() + get_bias('bias4')
@@ -266,8 +266,8 @@ class Layer():
                 with tf.variable_scope(f'block_{i}_{filters}'):
                     x = self.conv_norm_activation(x, filters, 3, padding='same', norm=conv_norm)
                     x = tf.layers.max_pooling2d(x, 3, 2, padding='same')
-                    x = residual(x, f'residual_1')
-                    x = residual(x, f'residual_2')
+                    x = residual(x, name='residual_1')
+                    x = residual(x, name='residual_2')
             
             x = tf.nn.relu(x)
             x = tf.layers.flatten(x)

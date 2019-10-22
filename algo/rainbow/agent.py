@@ -58,15 +58,18 @@ class Agent(DDQN):
             
             Tz = n_step_target(self.data['reward'], self.data['done'], 
                                 z_support[None, :], self.gamma, self.data['steps'])     # [B, N]
+            # compute projection
             Tz = tf.clip_by_value(Tz, v_min, v_max)[:, None, :]                         # [B, 1, N]
-            z_original = z_support[None, :, None]                                       # [1, N, 1]
+            z_support = z_support[None, :, None]                                        # [1, N, 1]
 
-            weight = tf.clip_by_value(1. - tf.abs(Tz - z_original) / delta_z, 0, 1)     # [B, N, N]
-            dist_target = tf.reduce_sum(weight * self.Qnets.dist_next_target, axis=2)   # [B, N]
+            # quotient = `[1 - numerator / (\Delta z)]_0^1` in Eq7.
+            quotient = tf.clip_by_value(1. - tf.abs(Tz - z_support) / delta_z, 0, 1)    # [B, N, N]
+            dist_next = tf.expand_dims(self.Qnets.dist_next_target, 1)                  # [B, 1, N]
+            dist_target = tf.reduce_sum(quotient * dist_next, axis=2)                   # [B, N]
             dist_target = tf.stop_gradient(dist_target)
 
             kl_loss = tf.nn.softmax_cross_entropy_with_logits(labels=dist_target, logits=self.Qnets.logits)
-            loss = tf.reduce_mean(kl_loss, name='loss')
+            loss = tf.reduce_mean(self.data['IS_ratio'] * kl_loss, name='loss')
 
         with tf.name_scope('priority'):
             priority = self._rescale(kl_loss)
@@ -80,5 +83,4 @@ class Agent(DDQN):
                     if self.buffer_type == 'proportional':
                         stats_summary('priority', self.priority, max=True, std=True)
                     stats_summary('Q', self.Qnets.Q, max=True)
-                    stats_summary('prob', self.Qnets.dist, max=True)
                     tf.summary.scalar('loss_', self.loss)

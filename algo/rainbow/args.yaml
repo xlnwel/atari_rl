@@ -41,6 +41,7 @@ agent:
         learning_rate: 1.e-4
         end_lr: 5.e-5
         clip_norm: 10
+        epsilon: 0.0003125
     env_stats:
         times: 1
         stats: [score, score_mean, score_std, score_best, epslen_mean, epslen_std]

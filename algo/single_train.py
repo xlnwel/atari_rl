@@ -38,8 +38,8 @@ def train(agent):
     start_time = time.time()
     while step <= max_steps:
         train_duration, (scores, epslens, step, itr) = timeit(agent.train, step, itr)
-        pwc(f'Training Duration: {train_duration:2f}s\n', 'blue')
-        pwc(f'Average Score: {np.mean(scores):2f}\n', 'blue')
+        pwc(f'Training Duration: {train_duration:2f}s', 'blue')
+        pwc(f'Average Score: {np.mean(scores):2f}', 'blue')
         pwc(f'Average Epslen: {np.mean(epslens):2f}', 'blue')
 
         eval_duration, (eval_scores, eval_epslens) = timeit(agent.eval)
@@ -53,10 +53,10 @@ def train(agent):
         epslen_mean = np.mean(eval_epslens)
         epslen_std = np.mean(eval_epslens)
 
-        if score_best_mean > score_mean:
+        if score_mean > score_best_mean:
             score_best_mean = score_mean
             agent.save()
-            
+
         agent.record_stats(global_step=step, score=score, score_mean=score_mean, 
                             score_std=score_std, score_best=score_best,
                             epslen_mean=epslen_mean, epslen_std=epslen_std)
@@ -67,7 +67,6 @@ def train(agent):
             'Episode': itr,
             'TimeElapsed': f'{time.time() - start_time:.2f}s',
             'Score': score,
-            'TrainScoreMean': np.mean(agent.env.get_episode_rewards()[-20:]),
             'ScoreMean': score_mean,
             'ScoreStd': score_std,
             'ScoreBest': score_best,
@@ -101,9 +100,16 @@ def main(env_args, agent_args, buffer_args, render=False, restore=False):
 
     agent_args['env_stats']['times'] = 1
     sess_config = get_sess_config(2)
-    agent = Agent('Agent', agent_args, env_args, buffer_args, 
-                  save=True, log=True, log_tensorboard=True, 
-                  log_stats=True, log_params=False)
+    agent = Agent('Agent', 
+                  agent_args, 
+                  env_args, 
+                  buffer_args,
+                  sess_config=sess_config, 
+                  save=True, 
+                  log=True, 
+                  log_tensorboard=True, 
+                  log_stats=True, 
+                  log_params=False)
     
     if restore:
         agent.restore()

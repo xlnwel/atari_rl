@@ -28,6 +28,15 @@ Episodic rewards averaged over 100 episodes **at training time**.
   <figcaption></figcaption>
 </figure>
 
+Compare to [Google's Dopamine](https://github.com/google/dopamine) shown below, our implementation manages to achieving better performance on Breakout
+
+<figure>
+  <img src="results/dopamine-BreakoutNoFrameskip.png" alt="" width="1000">
+  <figcaption></figcaption>
+</figure>
+
+Source: https://google.github.io/dopamine/baselines/plots.html, each iteration stands for 250000 steps.
+
 ## Running
 
 ```shell

@@ -88,7 +88,11 @@ if __name__ == '__main__':
             prefix = cmd_args.prefix
             # Although random parameter search is in general better than grid search, 
             # we here continue to go with grid search since it is easier to deal with architecture search
-            gs = GridSearch(arg_file, main, render=cmd_args.render, n_trials=cmd_args.trials, dir_prefix=prefix)
+            gs = GridSearch(arg_file, main, 
+                            render=cmd_args.render, 
+                            n_trials=cmd_args.trials, 
+                            sub_process=len(algorithm) != 1,
+                            dir_prefix=prefix)
 
             if algo:
                 gs.agent_args['algo'] = algo
@@ -101,6 +105,6 @@ if __name__ == '__main__':
             elif algo == 'rainbow':
                 processes += gs()
             elif algo == 'rainbow-iqn':
-                processes += gs()
+                processes += gs(Qnets=dict(conv_norm='instance', dense_norm='layer'))
 
     [p.join() for p in processes]

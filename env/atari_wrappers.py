@@ -291,9 +291,9 @@ def wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False, 
 
 def make_deepmind_atari(args):
     env = make_atari(args['name'])
-    if 'log_video' in args and args['log_video']:
+    if args['log_video']:
         # put monitor in middle to properly record episodic information
-        env = gym.wrappers.Monitor(env, args['video_path'])
+        env = gym.wrappers.Monitor(env, args['video_path'], force=True)
     env = wrap_deepmind(env, args['episode_life'])
     
     return env

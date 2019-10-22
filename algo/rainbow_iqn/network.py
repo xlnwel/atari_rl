@@ -57,11 +57,14 @@ class RainbowIQN(Network):
 
         # quantile_values for regression loss
         # Q for priority required by PER
-        self.quantile_values, self.Q = self._iqn_values(self.action, self.N, quantile_values, Qs)
+        # [N, B, 1], [B, 1]
+        self.quantile_values, self.Q = self._iqn_values(self.action, self.N, quantile_values, Qs, 'quantile_q')
+        # [N', B, 1], [B, 1]
         self.quantile_values_next_target, self.Q_next_target = self._iqn_values(next_action, 
                                                                                 self.N_prime,
                                                                                 quantile_values_next_target, 
-                                                                                Qs_next_target)
+                                                                                Qs_next_target,
+                                                                                'next_quantile_q')
 
     def _iqn_net(self, x, n_quantiles, batch_size, out_dim, 
                 psi_net, phi_net, f_net, name, reuse=None):
@@ -69,15 +72,18 @@ class RainbowIQN(Network):
 
         with tf.variable_scope(name, reuse=reuse):
             # 𝜓 function in the paper
+            # [N*B, H]
             x_tiled = psi_net(x, n_quantiles)
             
             h_dim = x_tiled.shape.as_list()[1]
 
             # 𝜙 function in the paper
+            # [B, N, 1], [N*B, H]
             quantiles, x_quantiles = phi_net(n_quantiles, batch_size, quantile_embedding_dim, h_dim)
             # Combine outputs of psi and phi
-            y = x_tiled * x_quantiles
+            y = x_tiled * x_quantiles   # [N*B, H]
             # f function in the paper
+            # [N, B, O], [B, O]
             v_qv, v = f_net(y, 1, n_quantiles, batch_size, name='value_net')
             a_qv, a = f_net(y, out_dim, n_quantiles, batch_size, name='adv_net')
 
@@ -90,7 +96,7 @@ class RainbowIQN(Network):
     def _psi_net(self, x, n_quantiles):
         with tf.variable_scope('psi_net'):
             x = self._conv_net(x)
-            x_tiled = tf.tile(x, [n_quantiles, 1])
+            x_tiled = tf.tile(x, [n_quantiles, 1])      # [N*B, H]
         
         return x_tiled
 
@@ -99,7 +105,7 @@ class RainbowIQN(Network):
             quantile_shape = [n_quantiles * batch_size, 1]
             quantiles = tf.random.uniform(quantile_shape, minval=0, maxval=1)       # [N*B, 1]
             quantiles_tiled = tf.tile(quantiles, [1, quantile_embedding_dim])       # [N*B, D]
-            # returned quantiles for computing quantile regression loss
+            # returned quantiles for computing quantile regression loss, [B, N, 1]
             quantiles_reformed = tf.transpose(tf.reshape(quantiles, [n_quantiles, batch_size, 1]), [1, 0, 2])
             
         with tf.variable_scope('phi_net'):
@@ -107,26 +113,28 @@ class RainbowIQN(Network):
             degrees = tf.cast(tf.range(quantile_embedding_dim), tf.float32) * pi * quantiles_tiled
             x_quantiles = tf.cos(degrees)
             x_quantiles = tf.layers.dense(x_quantiles, h_dim)
-            x_quantiles = tf.nn.relu(x_quantiles)
+            x_quantiles = tf.nn.relu(x_quantiles)       # [N*B, H]
 
         return quantiles_reformed, x_quantiles
 
     def _f_net(self, x, out_dim, n_quantiles, batch_size, name=None):
         name = f'{name}_f_net' if name else 'f_net'
         with tf.variable_scope(name):
-            quantile_values = self._head_net(x, out_dim)
-            quantile_values = tf.reshape(quantile_values, (n_quantiles, batch_size, out_dim))
-            q = tf.reduce_mean(quantile_values, axis=0)
+            quantile_values = self._head_net(x, out_dim)        # [N*B, O]
+            quantile_values = tf.reshape(quantile_values, (n_quantiles, batch_size, out_dim))   # [N, B, O]
+            q = tf.reduce_mean(quantile_values, axis=0)         # [B, O]
 
         return quantile_values, q
         
-    def _iqn_values(self, action, n_quantiles, quantile_values, Qs):
-        with tf.name_scope('action_values'):
-            action_tiled = tf.reshape(tf.tile(action, [n_quantiles]), 
+    def _iqn_values(self, action, n_quantiles, quantile_values, Qs, name):
+        with tf.name_scope(name):
+            action_tiled = tf.reshape(tf.tile(action, [n_quantiles]),
                                         [n_quantiles, -1])
             quantile_values = tf.reduce_sum(tf.one_hot(action_tiled, self.n_actions)
-                                            * quantile_values, axis=2, keepdims=True)
+                                            * quantile_values, axis=2, keepdims=True,
+                                            name='quantile_values')
             q = tf.reduce_sum(tf.one_hot(action, self.n_actions)
-                              * Qs, axis=1, keepdims=True)
+                              * Qs, axis=1, keepdims=True,
+                              name='q')
 
         return quantile_values, q

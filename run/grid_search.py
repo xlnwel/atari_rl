@@ -8,7 +8,7 @@ from utility.debug_tools import assert_colorize
 
 
 class GridSearch:
-    def __init__(self, args_file, train_func, render=False, n_trials=1, dir_prefix=''):
+    def __init__(self, args_file, train_func, render=False, n_trials=1, sub_process=False, dir_prefix=''):
         args = load_args(args_file)
         self.env_args = args['env']
         self.agent_args = args['agent']
@@ -16,6 +16,7 @@ class GridSearch:
         self.train_func = train_func
         self.render = render
         self.n_trials = n_trials
+        self.sub_process = sub_process
         self.dir_prefix = dir_prefix
 
         self.processes = []
@@ -24,7 +25,14 @@ class GridSearch:
         self._dir_setup()
         if kwargs == {} and self.n_trials == 1:
             # if no argument is passed in, run the default setting
-            self.train_func(self.env_args, self.agent_args, self.buffer_args, self.render)        
+            if self.sub_process:
+                p = Process(target=self.train_func, 
+                            args=(self.env_args, self.agent_args, self.buffer_args, self.render))
+                p.start()
+                time.sleep(1)
+                self.processes.append(p)
+            else:
+                self.train_func(self.env_args, self.agent_args, self.buffer_args, self.render)        
         else:
             # do grid search
             self.agent_args['model_name'] = 'GS'

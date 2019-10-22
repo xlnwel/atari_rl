@@ -23,7 +23,6 @@ class Agent(DDQN):
                  log_stats=False, 
                  device=None,
                  reuse=None):
-
         super().__init__(name, args, 
                          env_args, buffer_args,
                          sess_config=sess_config, 
@@ -52,18 +51,17 @@ class Agent(DDQN):
         def tiled_n_step_target():
             n_quantiles = self.args['Qnets']['N_prime']
             
-            reward_tiled = tf.reshape(tf.tile(self.data['reward'], [n_quantiles, 1]),
-                                      [n_quantiles, -1, 1])
-            done_tiled = tf.reshape(tf.tile(self.data['done'], [n_quantiles, 1]),
-                                      [n_quantiles, -1, 1])
-            steps_tiled = tf.reshape(tf.tile(self.data['steps'], [n_quantiles, 1]),
-                                      [n_quantiles, -1, 1])
-            return n_step_target(reward_tiled, done_tiled, 
+            reward = self.data['reward'][None, ...]
+            done = self.data['done'][None, ...]
+            steps = self.data['steps'][None, ...]
+            return n_step_target(reward, done, 
                                  self.Qnets.quantile_values_next_target,
-                                 self.gamma, steps_tiled)
-
+                                 self.gamma, steps)
+            
         def quantile_regression_loss(u):
+            # [B, N, N']
             abs_part = tf.abs(self.Qnets.quantiles - tf.where(u < 0, tf.ones_like(u), tf.zeros_like(u)))
+            
             huber = huber_loss(u, delta=self.args['Qnets']['delta'])
             
             qr_loss = tf.reduce_sum(tf.reduce_mean(abs_part * huber, axis=2), axis=1)   # [B]
@@ -75,10 +73,10 @@ class Agent(DDQN):
                                     self.Qnets.Q_next_target, self.gamma, self.data['steps'])
 
         with tf.name_scope('loss'):
-            quantile_values_target = tiled_n_step_target()
+            quantile_values_target = tiled_n_step_target()                              # [N', B, 1]
             quantile_values_target = tf.transpose(quantile_values_target, [1, 2, 0])    # [B, 1, N']
             quantile_values = tf.transpose(self.Qnets.quantile_values, [1, 0, 2])       # [B, N, 1]
-            quantile_error = tf.abs(quantile_values - quantile_values_target)
+            quantile_error = quantile_values_target - quantile_values                   # [B, N, N']
 
             loss = quantile_regression_loss(quantile_error)
 

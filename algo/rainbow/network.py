@@ -40,7 +40,7 @@ class Rainbow(Network):
         self.best_action = select_action(Qs, 'best_action')
         next_action = select_action(Qs_next, 'next_action')
 
-        # [B, 1, N], [B, 1, N]
+        # [B, N], [B, N]
         self.logits = self._c51_action_value(self.action, logits, 'logits')
         self.dist_next_target = self._c51_action_value(next_action, dist_next_target, 'dist_next_target')
         # for tensorboard bookkeeping
@@ -73,6 +73,5 @@ class Rainbow(Network):
         with tf.name_scope(name):
             action = action[..., None]
             value = tf.gather_nd(values, action, batch_dims=1)
-            value = tf.expand_dims(value, axis=1)
 
         return value

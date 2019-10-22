@@ -33,7 +33,6 @@ class Agent(Model):
         # hyperparameters
         self.gamma = args['gamma'] if 'gamma' in args else .99
         self.update_freq = args['update_freq']
-        self.loss_type = args['loss_type']
         self.target_update_freq = args['target_update_freq']
         self.update_step = 0
 
@@ -84,7 +83,7 @@ class Agent(Model):
                          device=device)
 
         # learing rate schedule
-        decay_duration = float(self.args['max_steps']) / 10 # 2e7
+        decay_duration = float(self.args['max_steps'])
         lr = float(self.args['Qnets']['learning_rate'])
         end_lr = float(self.args['Qnets']['end_lr'])
         self.lr_schedule = PiecewiseSchedule([(0, lr), (decay_duration / 8, lr), (decay_duration / 4,  end_lr)],
@@ -297,7 +296,7 @@ class Agent(Model):
                                     self.Qnets.Q_next_target, self.gamma, self.data['steps'])
 
         with tf.name_scope('loss'):
-            loss_func = huber_loss if self.loss_type == 'huber' else tf.square
+            loss_func = huber_loss if self.args['loss_type'] == 'huber' else tf.square
             if self.buffer_type == 'proportional':
                 loss = tf.reduce_mean(self.data['IS_ratio'][:, None] * loss_func(Q_error), name='loss')
             else:

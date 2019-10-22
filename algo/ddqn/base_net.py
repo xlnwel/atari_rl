@@ -54,7 +54,7 @@ class Network(Module):
         def net(x, out_dim):
             layer = self.noisy if self.use_noisy else self.dense
             name_fn = lambda i: f'noisy_{i}' if self.use_noisy else f'dense_{i}'
-            x = layer(x, 512, name=name_fn(1))
+            x = layer(x, 256, name=name_fn(1))
             x = norm_activation(x, norm=self.dense_norm, activation=tf.nn.relu)
             x = layer(x, out_dim, name=name_fn(2))
             return x
