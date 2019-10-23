@@ -26,14 +26,15 @@ class Replay:
         self.is_full = False
         self.mem_idx = 0
 
-        init_buffer(self.memory, self.capacity, obs_space, False)
+        init_buffer(self.memory, self.capacity, obs_space, self.n_steps == 1)
 
         # Code for single agent
-        self.tb_capacity = args['tb_capacity']
-        self.tb_idx = 0
-        self.tb_full = False
-        self.tb = {}
-        init_buffer(self.tb, self.tb_capacity, obs_space, True)
+        if self.n_steps > 1:
+            self.tb_capacity = args['tb_capacity']
+            self.tb_idx = 0
+            self.tb_full = False
+            self.tb = {}
+            init_buffer(self.tb, self.tb_capacity, obs_space, True)
         
         # locker used to avoid conflict introduced by tf.data.Dataset and multi-agent
         self.locker = threading.Lock()
@@ -58,13 +59,13 @@ class Replay:
 
         return samples
 
-    def merge(self, local_buffer, length, start=0):
+    def merge(self, local_buffer, length):
         """ Merge a local buffer to the replay buffer, useful for distributed algorithms """
         assert_colorize(length < self.capacity, 'Local buffer is too large')
         with self.locker:
-            self._merge(local_buffer, length, start)
+            self._merge(local_buffer, length)
 
-    def add(self, obs, action, reward, done):
+    def add(self):
         """ Add a single transition to the replay buffer """
         # locker should be handled in implementation
         raise NotImplementedError
@@ -73,53 +74,60 @@ class Replay:
     def _add(self, obs, action, reward, done):
         """ add is only used for single agent, no multiple adds are expected to run at the same time
             but it may fight for resource with self.sample if background learning is enabled """
-        add_buffer(self.tb, self.tb_idx, obs, action, reward, 
-                    done, self.n_steps, self.gamma)
-        
-        if not self.tb_full and self.tb_idx == self.tb_capacity - 1:
-            self.tb_full = True
-        self.tb_idx = (self.tb_idx + 1) % self.tb_capacity
+        if self.n_steps > 1:
+            add_buffer(self.tb, self.tb_idx, obs, action, reward, 
+                        done, self.n_steps, self.gamma)
+            
+            if not self.tb_full and self.tb_idx == self.tb_capacity - 1:
+                self.tb_full = True
+            self.tb_idx = (self.tb_idx + 1) % self.tb_capacity
 
-        if done:
-            # flush all elements in temporary buffer to memory if an episode is done
-            self.merge(self.tb, self.tb_capacity if self.tb_full else self.tb_idx)
-            self.tb_full = False
-            self.tb_idx = 0
-        elif self.tb_full:
-            # add the ready experiences in temporary buffer to memory
-            n_not_ready = max(self.frame_history_len, self.n_steps) - 1
-            n_ready = self.tb_capacity - n_not_ready
-            self.merge(self.tb, n_ready, self.tb_idx)
-            assert self.tb_idx == 0
-            copy_buffer(self.tb, 0, n_not_ready, self.tb, self.tb_capacity - n_not_ready, self.tb_capacity)
-            self.tb_idx = n_not_ready
-            self.tb_full = False
+            if done:
+                # flush all elements in temporary buffer to memory if an episode is done
+                self.merge(self.tb, self.tb_idx or self.tb_capacity)
+                assert (self.tb_capacity if self.tb_full else self.tb_idx) == (self.tb_idx or self.tb_capacity)
+                self.tb_full = False
+                self.tb_idx = 0
+            elif self.tb_full:
+                # add ready experiences in temporary buffer to memory
+                n_not_ready = max(self.frame_history_len, self.n_steps) - 1
+                n_ready = self.tb_capacity - n_not_ready
+                assert self.tb_idx == 0
+                self.merge(self.tb, n_ready)
+                copy_buffer(self.tb, 0, n_not_ready, self.tb, self.tb_capacity - n_not_ready, self.tb_capacity)
+                self.tb_idx = n_not_ready
+                self.tb_full = False
+        else:
+            with self.locker:
+                add_buffer(self.memory, self.mem_idx, obs, action, reward,
+                            done, self.n_steps, self.gamma)
+                self.mem_idx += 1
 
     def _sample(self):
         raise NotImplementedError
 
-    def _merge(self, local_buffer, length, start=0):
+    def _merge(self, local_buffer, length):
         end_idx = self.mem_idx + length
 
         if end_idx > self.capacity:
             first_part = self.capacity - self.mem_idx
             second_part = length - first_part
             
-            copy_buffer(self.memory, self.mem_idx, self.capacity, local_buffer, start, start + first_part)
-            copy_buffer(self.memory, 0, second_part, local_buffer, start + first_part, start + length)
+            copy_buffer(self.memory, self.mem_idx, self.capacity, local_buffer, 0, first_part)
+            copy_buffer(self.memory, 0, second_part, local_buffer, first_part, length)
         else:
-            copy_buffer(self.memory, self.mem_idx, end_idx, local_buffer, start, start + length)
+            copy_buffer(self.memory, self.mem_idx, end_idx, local_buffer, 0, length)
 
         # memory is full, recycle buffer via FIFO
         if not self.is_full and end_idx >= self.capacity:
-            pwc('Memory is fulll', 'green')
+            pwc('Memory is full', 'green')
             self.is_full = True
         
         self.mem_idx = end_idx % self.capacity
 
     def _get_samples(self, indexes):
-        indexes = list(indexes) # convert tuple to list
-
+        indexes = np.asarray(indexes) # convert tuple to array
+        
         obs = np.stack([encode_obs(idx, self.memory['obs'], self.memory['done'],
                         self.frame_history_len, self.is_full, self.capacity) for idx in indexes])
         # squeeze steps since it is of shape [None, 1]

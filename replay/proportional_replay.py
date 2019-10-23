@@ -23,6 +23,7 @@ class ProportionalPrioritizedReplay(Replay):
         self.epsilon = float(args['epsilon']) if 'epsilon' in args else 1e-4
 
         self.top_priority = 2.
+        self.to_update_priority = args['to_update_priority'] if 'to_update_priority' in args else True
 
         self.sample_i = 0   # count how many times self.sample is called
 
@@ -39,13 +40,18 @@ class ProportionalPrioritizedReplay(Replay):
         return samples
 
     @override(Replay)
-    def add(self, obs, action, reward, done):
-        self.tb['priority'][self.tb_idx] = self.top_priority
-
-        super()._add(obs, action, reward, done)
+    def add(self, state, action, reward, done):
+        if self.n_steps > 1:
+            self.tb['priority'][self.tb_idx] = self.top_priority
+        else:
+            self.memory['priority'][self.mem_idx] = self.top_priority
+            self.data_structure.update(self.top_priority, self.mem_idx)
+        super()._add(state, action, reward, done)
 
     def update_priorities(self, priorities, saved_mem_idxs):
         with self.locker:
+            if self.to_update_priority:
+                self.top_priority = max(self.top_priority, np.max(priorities))
             for priority, mem_idx in zip(priorities, saved_mem_idxs):
                 self.data_structure.update(priority, mem_idx)
 
@@ -54,12 +60,13 @@ class ProportionalPrioritizedReplay(Replay):
         self.beta = self.beta_schedule.value(self.sample_i)
 
     @override(Replay)
-    def _merge(self, local_buffer, length, start=0):
+    def _merge(self, local_buffer, length):
         end_idx = self.mem_idx + length
+        assert np.all(local_buffer['priority'][: length])
         for idx, mem_idx in enumerate(range(self.mem_idx, end_idx)):
             self.data_structure.update(local_buffer['priority'][idx], mem_idx % self.capacity)
             
-        super()._merge(local_buffer, length, start)
+        super()._merge(local_buffer, length)
     
     @override(Replay)
     def _sample(self):
