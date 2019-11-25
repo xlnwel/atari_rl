@@ -31,7 +31,7 @@ Episodic rewards averaged over 100 episodes **at training time**.
 Compare to [Google's Dopamine](https://github.com/google/dopamine) shown below, our implementation manages to achieving better performance on Breakout
 
 <figure>
-  <img src="results/dopamine-BreakoutNoFrameskip.png" alt="" width="1000">
+  <img src="results/dopamine-breakout.png" alt="" width="1000">
   <figcaption></figcaption>
 </figure>
 
